@@ -29,55 +29,55 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="@drawable/widget_badge_bg"
-            android:paddingHorizontal="6dp"
-            android:paddingVertical="2dp"
+            android:paddingLeft="8dp"
+            android:paddingTop="3dp"
+            android:paddingRight="8dp"
+            android:paddingBottom="3dp"
             android:text="Phòng B204"
             android:textColor="#FFFFFF"
             android:textSize="11sp"
             android:textStyle="bold" />
     </LinearLayout>
 
-    <Space
-        android:layout_width="match_parent"
-        android:layout_height="4dp" />
-
-    <!-- Class Title -->
+    <!-- Class Title (with marginTop instead of Space) -->
     <TextView
         android:id="@+id/widget_class_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="Toán Cao Cấp &amp; Giải Tích"
+        android:text="Toán Cao Cấp"
         android:textColor="#FFFFFF"
         android:textSize="15sp"
         android:textStyle="bold" />
 
-    <!-- Time Range & Lecturer -->
+    <!-- Time Range & Lecturer (with marginTop instead of Space) -->
     <TextView
         android:id="@+id/widget_time_lecturer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="08:00 - 09:30 • GV: PGS.TS Trần Đình Nam"
+        android:text="08:00 - 09:30"
         android:textColor="#E2E8F0"
         android:textSize="11sp" />
 
-    <Space
-        android:layout_width="match_parent"
-        android:layout_height="6dp" />
-
-    <!-- Countdown Box -->
+    <!-- Countdown Box (with marginTop instead of Space) -->
     <LinearLayout
+        android:id="@+id/widget_countdown_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
         android:background="@drawable/widget_countdown_bg"
         android:gravity="center"
         android:orientation="horizontal"
-        android:paddingVertical="4dp">
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp">
 
         <TextView
+            android:id="@+id/widget_countdown_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Bắt đầu sau: "
@@ -91,7 +91,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="#FEF08A"
-            android:textSize="15sp"
+            android:textSize="14sp"
             android:textStyle="bold" />
     </LinearLayout>
 

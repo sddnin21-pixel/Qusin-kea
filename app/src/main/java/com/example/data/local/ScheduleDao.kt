@@ -14,6 +14,9 @@ interface ScheduleDao {
     @Query("SELECT * FROM schedule_items ORDER BY dayOfWeek ASC, startTime ASC")
     fun getAllSchedules(): Flow<List<ScheduleItem>>
 
+    @Query("SELECT * FROM schedule_items ORDER BY dayOfWeek ASC, startTime ASC")
+    suspend fun getAllSchedulesList(): List<ScheduleItem>
+
     @Query("SELECT * FROM schedule_items WHERE dayOfWeek = :day ORDER BY startTime ASC")
     fun getSchedulesByDay(day: Int): Flow<List<ScheduleItem>>
 
