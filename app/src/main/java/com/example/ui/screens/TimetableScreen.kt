@@ -243,16 +243,27 @@ fun SmartTodayBanner(
     onQuickAdd: () -> Unit,
     onQuickScan: () -> Unit
 ) {
+    var currentTimeMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            currentTimeMillis = System.currentTimeMillis()
+        }
+    }
+
     val cal = Calendar.getInstance()
     val currentMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+    val currentSeconds = cal.get(Calendar.SECOND)
 
     var ongoingItem: ScheduleItem? = null
     var nextItem: ScheduleItem? = null
-    var minutesToNext = Int.MAX_VALUE
+    var remainingSecondsToNext = Long.MAX_VALUE
 
     for (item in todaySchedules) {
         val startParts = item.startTime.split(":")
-        val startMins = (startParts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
+        val startH = startParts.getOrNull(0)?.toIntOrNull() ?: 0
+        val startM = startParts.getOrNull(1)?.toIntOrNull() ?: 0
+        val startMins = startH * 60 + startM
 
         val endParts = item.endTime.split(":")
         val endMins = (endParts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0)
@@ -261,9 +272,11 @@ fun SmartTodayBanner(
             ongoingItem = item
             break
         } else if (startMins > currentMinutes) {
-            val diff = startMins - currentMinutes
-            if (diff < minutesToNext) {
-                minutesToNext = diff
+            val totalStartSecs = startMins * 60
+            val currentTotalSecs = currentMinutes * 60 + currentSeconds
+            val diffSecs = totalStartSecs - currentTotalSecs
+            if (diffSecs < remainingSecondsToNext) {
+                remainingSecondsToNext = diffSecs.toLong()
                 nextItem = item
             }
         }
@@ -340,28 +353,65 @@ fun SmartTodayBanner(
                     )
                 }
                 nextItem != null -> {
-                    val timeDesc = if (minutesToNext <= 60) "còn $minutesToNext phút" else "lúc ${nextItem.startTime}"
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.AccessTime,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Lớp tiếp theo ($timeDesc): ${nextItem.title}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                    val safeSecs = maxOf(0L, remainingSecondsToNext)
+                    val mins = safeSecs / 60
+                    val secs = safeSecs % 60
+                    val countdownStr = if (mins >= 60) {
+                        val hrs = mins / 60
+                        val remMins = mins % 60
+                        "${hrs}h ${remMins}p ${secs}s"
+                    } else {
+                        "${mins}p ${secs}s" // e.g. "14p 59s" -> "14p 58s"
                     }
-                    if (nextItem.room.isNotBlank()) {
+
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.AccessTime,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Tiết tiếp: ${nextItem.title}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            // Live ticking countdown pill!
+                            Surface(
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "⏳ $countdownStr",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Phòng: ${nextItem.room}",
+                            text = "Lúc ${nextItem.startTime} - ${nextItem.endTime} ${if (nextItem.room.isNotBlank()) "• Phòng ${nextItem.room}" else ""}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                            modifier = Modifier.padding(start = 22.dp, top = 2.dp)
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
+                            modifier = Modifier.padding(start = 22.dp)
                         )
                     }
                 }

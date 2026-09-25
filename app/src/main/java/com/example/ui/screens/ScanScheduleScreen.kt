@@ -1,7 +1,5 @@
 package com.example.ui.screens
 
-import android.content.ClipboardManager
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
@@ -15,6 +13,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,7 +39,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Place
@@ -53,7 +52,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -85,7 +83,6 @@ import com.example.data.model.ScheduleItem
 import com.example.ui.viewmodel.TimetableUiState
 import com.example.ui.viewmodel.TimetableViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScanScheduleScreen(
     state: TimetableUiState,
@@ -95,6 +92,7 @@ fun ScanScheduleScreen(
     val context = LocalContext.current
     var selectedBitmap by remember { mutableStateOf<Bitmap?>(state.previewBitmap) }
     var selectedSampleIndex by remember { mutableStateOf<Int?>(null) }
+    var currentBatchBitmaps by remember { mutableStateOf<List<Bitmap>>(state.batchBitmaps) }
     val selectedItemIndices = remember(state.extractedItems) {
         mutableStateListOf<Int>().apply {
             addAll(state.extractedItems.indices)
@@ -108,12 +106,43 @@ fun ScanScheduleScreen(
         if (bitmap != null) {
             selectedBitmap = bitmap
             selectedSampleIndex = null
+            currentBatchBitmaps = listOf(bitmap)
+            viewModel.setBatchBitmaps(listOf(bitmap))
             viewModel.scanImage(bitmap)
         }
     }
 
-    // Photo picker launcher (for Screenshots or any Gallery image)
-    val photoPickerLauncher = rememberLauncherForActivityResult(
+    // Multiple photo picker launcher (Zero-permission Android Photo Picker for batch screenshots)
+    val multiPhotoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            val bitmaps = mutableListOf<Bitmap>()
+            for (uri in uris) {
+                try {
+                    val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                    }
+                    bitmaps.add(bmp.copy(Bitmap.Config.ARGB_8888, true))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            if (bitmaps.isNotEmpty()) {
+                currentBatchBitmaps = bitmaps
+                selectedBitmap = bitmaps.firstOrNull()
+                selectedSampleIndex = null
+                viewModel.setBatchBitmaps(bitmaps)
+                viewModel.showSnackbar("Đã chọn ${bitmaps.size} ảnh chụp màn hình. Sẵn sàng quét hàng loạt!")
+            }
+        }
+    }
+
+    // Single photo picker
+    val singlePhotoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
@@ -126,8 +155,9 @@ fun ScanScheduleScreen(
                 }
                 val softwareBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
                 selectedBitmap = softwareBitmap
+                currentBatchBitmaps = listOf(softwareBitmap)
                 selectedSampleIndex = null
-                viewModel.setPreviewBitmapOnly(softwareBitmap)
+                viewModel.setBatchBitmaps(listOf(softwareBitmap))
             } catch (e: Exception) {
                 e.printStackTrace()
                 viewModel.showSnackbar("Không thể mở ảnh: ${e.message}")
@@ -195,7 +225,7 @@ fun ScanScheduleScreen(
             }
         }
 
-        // Upload and Screenshot Selection Area
+        // Selection & Preview Section
         if (state.extractedItems.isEmpty() && !state.isScanning) {
             val scrollState = rememberScrollState()
             Column(
@@ -204,16 +234,14 @@ fun ScanScheduleScreen(
                     .verticalScroll(scrollState)
                     .padding(horizontal = 16.dp)
             ) {
-                // If an image is selected, show Preview & Action Card
-                if (selectedBitmap != null) {
+                // If 1 or multiple images are selected
+                if (currentBatchBitmaps.isNotEmpty()) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 16.dp),
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(
                             modifier = Modifier
@@ -221,34 +249,94 @@ fun ScanScheduleScreen(
                                 .padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                Image(
-                                    bitmap = selectedBitmap!!.asImageBitmap(),
-                                    contentDescription = "Ảnh chụp màn hình đã chọn",
+                            // Multiple image carousel thumbnail list
+                            if (currentBatchBitmaps.size > 1) {
+                                Text(
+                                    text = "Đã chọn ${currentBatchBitmaps.size} ảnh chụp màn hình (Quét hàng loạt)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(230.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp)),
-                                    contentScale = ContentScale.Fit
-                                )
-
-                                Surface(
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                    shape = CircleShape,
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(8.dp)
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    IconButton(
-                                        onClick = {
-                                            selectedBitmap = null
-                                            selectedSampleIndex = null
-                                            viewModel.setPreviewBitmapOnly(null)
-                                        },
-                                        modifier = Modifier.size(36.dp)
+                                    currentBatchBitmaps.forEachIndexed { idx, bmp ->
+                                        Box(
+                                            modifier = Modifier
+                                                .size(90.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .border(
+                                                    if (selectedBitmap == bmp) 2.dp else 1.dp,
+                                                    if (selectedBitmap == bmp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                                    RoundedCornerShape(10.dp)
+                                                )
+                                                .clickable { selectedBitmap = bmp }
+                                        ) {
+                                            Image(
+                                                bitmap = bmp.asImageBitmap(),
+                                                contentDescription = "Ảnh ${idx + 1}",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.primary,
+                                                shape = CircleShape,
+                                                modifier = Modifier
+                                                    .align(Alignment.TopStart)
+                                                    .padding(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "${idx + 1}",
+                                                    color = MaterialTheme.colorScheme.onPrimary,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+
+                            // Large preview of currently selected bitmap
+                            selectedBitmap?.let { bmp ->
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    Image(
+                                        bitmap = bmp.asImageBitmap(),
+                                        contentDescription = "Ảnh xem trước",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(220.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp)),
+                                        contentScale = ContentScale.Fit
+                                    )
+
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                        shape = CircleShape,
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(8.dp)
                                     ) {
-                                        Icon(Icons.Default.Close, contentDescription = "Bỏ ảnh", modifier = Modifier.size(20.dp))
+                                        IconButton(
+                                            onClick = {
+                                                selectedBitmap = null
+                                                selectedSampleIndex = null
+                                                currentBatchBitmaps = emptyList()
+                                                viewModel.setBatchBitmaps(emptyList())
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(Icons.Default.Close, contentDescription = "Bỏ ảnh", modifier = Modifier.size(20.dp))
+                                        }
                                     }
                                 }
                             }
@@ -256,13 +344,16 @@ fun ScanScheduleScreen(
                             Spacer(modifier = Modifier.height(14.dp))
 
                             Text(
-                                text = "Ảnh chụp màn hình thời khóa biểu đã sẵn sàng",
+                                text = if (currentBatchBitmaps.size > 1)
+                                    "Sẵn sàng quét hàng loạt ${currentBatchBitmaps.size} ảnh thời khóa biểu"
+                                else
+                                    "Ảnh thời khóa biểu đã sẵn sàng",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "AI sẽ đọc toàn bộ các cột Thứ, Tiết học, Phòng học và tự động tạo thời khóa biểu lặp lại.",
+                                text = "Gemini AI sẽ phân tích và gộp tất cả các môn học từ các ảnh mà không bị trùng lặp.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -270,29 +361,36 @@ fun ScanScheduleScreen(
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                            // Action buttons for selected screenshot
+                            // Scan Button
                             Button(
                                 onClick = {
-                                    selectedBitmap?.let { bmp ->
-                                        if (state.apiKey.isNotBlank()) {
-                                            viewModel.scanImage(bmp)
-                                        } else if (selectedSampleIndex != null) {
-                                            viewModel.scanSampleScreenshotDemo(selectedSampleIndex!!, bmp)
-                                        } else {
-                                            viewModel.scanImage(bmp)
+                                    if (currentBatchBitmaps.size > 1) {
+                                        viewModel.scanMultipleImages(currentBatchBitmaps)
+                                    } else {
+                                        selectedBitmap?.let { bmp ->
+                                            if (state.apiKey.isNotBlank()) {
+                                                viewModel.scanImage(bmp)
+                                            } else if (selectedSampleIndex != null) {
+                                                viewModel.scanSampleScreenshotDemo(selectedSampleIndex!!, bmp)
+                                            } else {
+                                                viewModel.scanImage(bmp)
+                                            }
                                         }
                                     }
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(48.dp)
-                                    .testTag("analyze_screenshot_btn"),
+                                    .testTag("analyze_batch_btn"),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = if (state.apiKey.isNotBlank()) "Phân Tích Bằng Gemini AI" else "Quét Ảnh Bằng Gemini AI",
+                                    text = if (currentBatchBitmaps.size > 1)
+                                        "Quét Hàng Loạt (${currentBatchBitmaps.size} Ảnh) Bằng Gemini AI"
+                                    else
+                                        "Phân Tích Bằng Gemini AI",
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -319,13 +417,11 @@ fun ScanScheduleScreen(
                     }
                 }
 
-                // Screenshot Upload & Import Options
+                // Screenshot & Batch Selection Card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
                         modifier = Modifier
@@ -333,82 +429,83 @@ fun ScanScheduleScreen(
                             .padding(18.dp)
                     ) {
                         Text(
-                            text = "Tải Lên Ảnh Chụp Màn Hình Hoặc Ảnh Chụp",
+                            text = "Tải Lên Ảnh Chụp Màn Hình (Một hoặc Nhiều Ảnh)",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Hỗ trợ ảnh chụp màn hình máy tính, điện thoại, cổng thông tin sinh viên hoặc giấy viết tay.",
+                            text = "Có thể chọn cùng lúc nhiều ảnh chụp màn hình (T2-T4, T5-CN...) để AI quét và gộp chung.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Primary Action Grid
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            // Screenshot / Photo Picker Button
-                            Button(
-                                onClick = {
-                                    photoPickerLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    )
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(50.dp)
-                                    .testTag("screenshot_picker_btn"),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.Screenshot, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Ảnh Màn Hình")
-                            }
-
-                            // Camera Button
-                            OutlinedButton(
-                                onClick = { cameraLauncher.launch(null) },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(50.dp)
-                                    .testTag("camera_btn"),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Chụp Ảnh")
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Gallery / Files Button
-                        OutlinedButton(
+                        // Multi-selection button (BATCH SCAN)
+                        Button(
                             onClick = {
-                                photoPickerLauncher.launch(
+                                multiPhotoPickerLauncher.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 )
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(44.dp)
-                                .testTag("gallery_btn"),
-                            shape = RoundedCornerShape(12.dp)
+                                .height(50.dp)
+                                .testTag("multi_screenshot_picker_btn"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
                         ) {
-                            Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Mở Thư Viện Ảnh Thiết Bị")
+                            Icon(Icons.Default.Collections, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Chọn Nhiều Ảnh Chụp Màn Hình Cùng Lúc", fontWeight = FontWeight.Bold)
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Single image & Camera buttons
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    singlePhotoPickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("single_screenshot_picker_btn"),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Screenshot, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("1 Ảnh Màn Hình")
+                            }
+
+                            OutlinedButton(
+                                onClick = { cameraLauncher.launch(null) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("camera_btn"),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Chụp Camera")
+                            }
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Built-in Sample Timetable Screenshots Section (for instant 1-click test)
+                // Built-in Sample Timetable Screenshots Section
                 Text(
                     text = "Hoặc thử ngay với ảnh chụp màn hình mẫu:",
                     style = MaterialTheme.typography.titleSmall,
@@ -421,10 +518,9 @@ fun ScanScheduleScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Sample 1: Mobile App Timetable Screenshot
                     SampleScreenshotCard(
-                        title = "Mẫu 1: Ứng dụng điện thoại",
-                        description = "Ảnh chụp màn hình app lịch học ĐH",
+                        title = "Mẫu 1: App Di Động",
+                        description = "Ảnh app thời khóa biểu ĐH",
                         imageRes = R.drawable.sample_screenshot_1,
                         isSelected = selectedSampleIndex == 1,
                         modifier = Modifier.weight(1f),
@@ -432,14 +528,14 @@ fun ScanScheduleScreen(
                             selectedSampleIndex = 1
                             val bmp = BitmapFactory.decodeResource(context.resources, R.drawable.sample_screenshot_1)
                             selectedBitmap = bmp
-                            viewModel.setPreviewBitmapOnly(bmp)
+                            currentBatchBitmaps = listOf(bmp)
+                            viewModel.setBatchBitmaps(listOf(bmp))
                         }
                     )
 
-                    // Sample 2: Web Portal Timetable Table Screenshot
                     SampleScreenshotCard(
-                        title = "Mẫu 2: Cổng đào tạo Web",
-                        description = "Ảnh chụp bảng thời khóa biểu",
+                        title = "Mẫu 2: Cổng Đào Tạo",
+                        description = "Ảnh bảng lịch học Web",
                         imageRes = R.drawable.sample_screenshot_2,
                         isSelected = selectedSampleIndex == 2,
                         modifier = Modifier.weight(1f),
@@ -447,7 +543,8 @@ fun ScanScheduleScreen(
                             selectedSampleIndex = 2
                             val bmp = BitmapFactory.decodeResource(context.resources, R.drawable.sample_screenshot_2)
                             selectedBitmap = bmp
-                            viewModel.setPreviewBitmapOnly(bmp)
+                            currentBatchBitmaps = listOf(bmp)
+                            viewModel.setBatchBitmaps(listOf(bmp))
                         }
                     )
                 }
@@ -456,7 +553,7 @@ fun ScanScheduleScreen(
             }
         }
 
-        // Scanning State
+        // Scanning State with Batch Progress indicator
         if (state.isScanning) {
             Box(
                 modifier = Modifier
@@ -467,20 +564,23 @@ fun ScanScheduleScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(52.dp),
+                        modifier = Modifier.size(54.dp),
                         strokeWidth = 4.dp
                     )
                     Spacer(modifier = Modifier.height(20.dp))
                     Text(
-                        text = "Gemini AI đang phân tích ảnh chụp màn hình...",
+                        text = "Gemini AI đang phân tích thời khóa biểu...",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Đang nhận dạng các môn học, phòng học, giảng viên và khung giờ lặp lại...",
+                        text = if (state.batchProgressText.isNotBlank())
+                            state.batchProgressText
+                        else
+                            "Đang nhận dạng môn học, phòng học, giảng viên và khung giờ lặp lại...",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.primary,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -606,6 +706,7 @@ fun ScanScheduleScreen(
                                 viewModel.clearExtractedItems()
                                 selectedBitmap = null
                                 selectedSampleIndex = null
+                                currentBatchBitmaps = emptyList()
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -806,3 +907,4 @@ fun ExtractedItemCard(
         }
     }
 }
+

@@ -131,4 +131,51 @@ class NotificationHelper(private val context: Context) {
 
         return target.timeInMillis
     }
+
+    fun showInstantTestNotification() {
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                ScheduleAlarmReceiver.CHANNEL_ID,
+                ScheduleAlarmReceiver.CHANNEL_NAME,
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Thông báo chuông nhắc nhở thời khóa biểu"
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 500, 200, 500)
+                enableLights(true)
+                lightColor = android.graphics.Color.BLUE
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val openAppIntent = Intent(context, com.example.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            99999,
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+        val notification = androidx.core.app.NotificationCompat.Builder(context, ScheduleAlarmReceiver.CHANNEL_ID)
+            .setSmallIcon(com.example.R.mipmap.ic_launcher)
+            .setContentTitle("🔔 [Thử Nghiệm] Nhắc nhở giờ học!")
+            .setContentText("Môn: Lập Trình Di Động (Android Kotlin) - Phòng Lab 4.2 lúc 08:00")
+            .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText("Môn học Lập Trình Di Động (Android Kotlin) sắp bắt đầu lúc 08:00 tại Phòng Lab 4.2. Hãy chuẩn bị bài vở và laptop!"))
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MAX)
+            .setDefaults(androidx.core.app.NotificationCompat.DEFAULT_ALL)
+            .setSound(soundUri)
+            .setVibrate(longArrayOf(0, 500, 200, 500))
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        notificationManager.notify(99999, notification)
+    }
 }

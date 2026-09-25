@@ -7,7 +7,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.ScheduleItem
 import com.example.data.repository.ScheduleRepository
 import com.example.data.service.GeminiScheduleParser
+import com.example.util.NotificationHelper
 import com.example.util.PreferencesManager
+import com.example.widget.TimetableCountdownWidgetProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +26,8 @@ data class TimetableUiState(
     val scanError: String? = null,
     val extractedItems: List<ScheduleItem> = emptyList(),
     val previewBitmap: Bitmap? = null,
+    val batchBitmaps: List<Bitmap> = emptyList(),
+    val batchProgressText: String = "",
     val defaultReminderMinutes: Int = 15,
     val isNotificationsEnabled: Boolean = true,
     val snackbarMessage: String? = null,
@@ -36,6 +40,7 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
     private val repository = ScheduleRepository(application)
     private val prefs = PreferencesManager(application)
     private val geminiParser = GeminiScheduleParser()
+    private val notificationHelper = NotificationHelper(application)
 
     private val _uiState = MutableStateFlow(
         TimetableUiState(
@@ -62,6 +67,8 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
                         filteredSchedules = filtered
                     )
                 }
+                // Refresh widget whenever data changes
+                TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
             }
         }
 
@@ -70,6 +77,7 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             if (prefs.isFirstLaunch()) {
                 repository.seedSampleDataIfEmpty()
                 prefs.setFirstLaunchCompleted()
+                TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
             }
         }
     }
@@ -144,6 +152,7 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
                 showSnackbar("Đã cập nhật môn học: ${item.title}")
             }
             closeAddEditDialog()
+            TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
         }
     }
 
@@ -151,6 +160,27 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             repository.delete(item)
             showSnackbar("Đã xóa môn: ${item.title}")
+            TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
+        }
+    }
+
+    fun setPreviewBitmapOnly(bitmap: Bitmap?) {
+        _uiState.update {
+            it.copy(
+                previewBitmap = bitmap,
+                batchBitmaps = if (bitmap != null) listOf(bitmap) else emptyList(),
+                scanError = null
+            )
+        }
+    }
+
+    fun setBatchBitmaps(bitmaps: List<Bitmap>) {
+        _uiState.update {
+            it.copy(
+                batchBitmaps = bitmaps,
+                previewBitmap = bitmaps.firstOrNull(),
+                scanError = null
+            )
         }
     }
 
@@ -159,9 +189,11 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         _uiState.update {
             it.copy(
                 previewBitmap = bitmap,
+                batchBitmaps = listOf(bitmap),
                 isScanning = true,
                 scanError = null,
-                extractedItems = emptyList()
+                extractedItems = emptyList(),
+                batchProgressText = "Đang kết nối Gemini AI Vision..."
             )
         }
 
@@ -186,7 +218,8 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
                 _uiState.update {
                     it.copy(
                         isScanning = false,
-                        extractedItems = items
+                        extractedItems = items,
+                        batchProgressText = ""
                     )
                 }
                 showSnackbar("Gemini AI đã tìm thấy ${items.size} môn học!")
@@ -194,15 +227,89 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
                 _uiState.update {
                     it.copy(
                         isScanning = false,
-                        scanError = error.message ?: "Không thể phân tích ảnh."
+                        scanError = error.message ?: "Không thể phân tích ảnh.",
+                        batchProgressText = ""
                     )
                 }
             }
         }
     }
 
-    fun setPreviewBitmapOnly(bitmap: Bitmap?) {
-        _uiState.update { it.copy(previewBitmap = bitmap, scanError = null) }
+    fun scanMultipleImages(bitmaps: List<Bitmap>) {
+        if (bitmaps.isEmpty()) return
+        if (bitmaps.size == 1) {
+            scanImage(bitmaps[0])
+            return
+        }
+
+        val apiKey = prefs.getApiKey()
+        _uiState.update {
+            it.copy(
+                batchBitmaps = bitmaps,
+                previewBitmap = bitmaps.firstOrNull(),
+                isScanning = true,
+                scanError = null,
+                extractedItems = emptyList(),
+                batchProgressText = "Bắt đầu phân tích hàng loạt ${bitmaps.size} ảnh..."
+            )
+        }
+
+        if (apiKey.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    isScanning = false,
+                    scanError = "Bạn cần nhập Gemini API Key để quét ảnh!",
+                    showApiKeyDialog = true
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            val aggregated = mutableListOf<ScheduleItem>()
+            var hadError = false
+            var lastErrorMsg = ""
+
+            for (index in bitmaps.indices) {
+                val currentBmp = bitmaps[index]
+                _uiState.update {
+                    it.copy(
+                        batchProgressText = "Đang phân tích ảnh ${index + 1}/${bitmaps.size} bằng Gemini Vision..."
+                    )
+                }
+
+                val result = geminiParser.parseTimetableImage(
+                    apiKey = apiKey,
+                    bitmap = currentBmp,
+                    defaultReminderMinutes = prefs.getDefaultReminderMinutes()
+                )
+
+                result.onSuccess { items ->
+                    aggregated.addAll(items)
+                }.onFailure { err ->
+                    hadError = true
+                    lastErrorMsg = err.message ?: "Lỗi ở ảnh ${index + 1}"
+                }
+            }
+
+            // Deduplicate items based on title, dayOfWeek and startTime
+            val distinctItems = aggregated.distinctBy {
+                "${it.title.lowercase().trim()}_${it.dayOfWeek}_${it.startTime}"
+            }
+
+            _uiState.update {
+                it.copy(
+                    isScanning = false,
+                    extractedItems = distinctItems,
+                    batchProgressText = "",
+                    scanError = if (distinctItems.isEmpty() && hadError) lastErrorMsg else null
+                )
+            }
+
+            if (distinctItems.isNotEmpty()) {
+                showSnackbar("Đã bóc tách thành công tổng cộng ${distinctItems.size} môn từ ${bitmaps.size} ảnh!")
+            }
+        }
     }
 
     fun scanSampleScreenshotDemo(sampleIndex: Int, bitmap: Bitmap? = null) {
@@ -211,12 +318,12 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
                 previewBitmap = bitmap ?: it.previewBitmap,
                 isScanning = true,
                 scanError = null,
-                extractedItems = emptyList()
+                extractedItems = emptyList(),
+                batchProgressText = "Đang nhận dạng thời khóa biểu từ ảnh mẫu..."
             )
         }
 
         viewModelScope.launch {
-            // Simulate brief intelligent processing
             kotlinx.coroutines.delay(1200)
             val items = geminiParser.getDemoParsedItemsForScreenshot(
                 sampleIndex = sampleIndex,
@@ -225,7 +332,8 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             _uiState.update {
                 it.copy(
                     isScanning = false,
-                    extractedItems = items
+                    extractedItems = items,
+                    batchProgressText = ""
                 )
             }
             showSnackbar("AI đã nhận dạng thành công ${items.size} môn học từ ảnh chụp màn hình!")
@@ -239,10 +347,12 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             _uiState.update {
                 it.copy(
                     extractedItems = emptyList(),
-                    previewBitmap = null
+                    previewBitmap = null,
+                    batchBitmaps = emptyList()
                 )
             }
             showSnackbar("Đã thêm thành công ${selectedItems.size} môn vào thời khóa biểu!")
+            TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
         }
     }
 
@@ -251,8 +361,21 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             it.copy(
                 extractedItems = emptyList(),
                 previewBitmap = null,
-                scanError = null
+                batchBitmaps = emptyList(),
+                scanError = null,
+                batchProgressText = ""
             )
+        }
+    }
+
+    fun importBackup(items: List<ScheduleItem>, replaceExisting: Boolean) {
+        viewModelScope.launch {
+            if (replaceExisting) {
+                repository.clearAll()
+            }
+            repository.insertAll(items)
+            showSnackbar("Đã nhập thành công ${items.size} môn học vào thời khóa biểu!")
+            TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
         }
     }
 
@@ -260,6 +383,7 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             repository.seedSampleDataIfEmpty()
             showSnackbar("Đã nạp thời khóa biểu mẫu.")
+            TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
         }
     }
 
@@ -267,6 +391,7 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             repository.clearAll()
             showSnackbar("Đã xóa toàn bộ thời khóa biểu.")
+            TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
         }
     }
 
@@ -280,6 +405,10 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         prefs.setNotificationsEnabled(enabled)
         _uiState.update { it.copy(isNotificationsEnabled = enabled) }
         showSnackbar(if (enabled) "Đã bật nhắc nhở thông báo" else "Đã tắt nhắc nhở thông báo")
+    }
+
+    fun triggerInstantTestNotification() {
+        notificationHelper.showInstantTestNotification()
     }
 
     fun showSnackbar(message: String) {

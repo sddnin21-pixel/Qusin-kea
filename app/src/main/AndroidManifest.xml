@@ -39,6 +39,19 @@
             </intent-filter>
         </receiver>
 
+        <!-- Timetable Countdown AppWidget -->
+        <receiver
+            android:name=".widget.TimetableCountdownWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.widget.ACTION_UPDATE_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/timetable_countdown_widget_info" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

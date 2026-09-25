@@ -3,6 +3,8 @@ package com.example.ui.screens
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,12 +30,15 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -43,6 +48,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,10 +64,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.receiver.ScheduleAlarmReceiver
+import androidx.core.content.ContextCompat
+import com.example.data.model.ScheduleItem
 import com.example.ui.viewmodel.TimetableUiState
 import com.example.ui.viewmodel.TimetableViewModel
 import com.example.util.GoogleCalendarHelper
+import com.example.util.ScheduleBackupHelper
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -71,6 +79,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     var showClearConfirmation by remember { mutableStateOf(false) }
+    var importedItemsPending by remember { mutableStateOf<List<ScheduleItem>?>(null) }
 
     // Calendar permissions launcher for direct sync
     val calendarPermissionsLauncher = rememberLauncherForActivityResult(
@@ -91,9 +100,24 @@ fun SettingsScreen(
     ) { isGranted ->
         if (isGranted) {
             viewModel.toggleNotifications(true)
-            Toast.makeText(context, "Đã cấp quyền thông báo nhắc nhở.", Toast.LENGTH_SHORT).show()
+            viewModel.triggerInstantTestNotification()
+            Toast.makeText(context, "Đã cấp quyền thông báo & gửi chuông thử nghiệm!", Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(context, "Chưa cấp quyền thông báo.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Cần cấp quyền Thông báo để nhận chuông nhắc giờ học.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Import file launcher (*.json)
+    val importFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val result = ScheduleBackupHelper.parseJsonBackup(context, uri)
+            result.onSuccess { items ->
+                importedItemsPending = items
+            }.onFailure { err ->
+                Toast.makeText(context, "Lỗi đọc file: ${err.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -139,37 +163,35 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (isKeyConfigured) "Đã thiết lập API Key hợp lệ" else "Chưa có API Key. Cần nhập để dùng AI quét ảnh.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isKeyConfigured) Color(0xFF10B981) else MaterialTheme.colorScheme.error,
+                        text = if (isKeyConfigured) "Đã kết nối Gemini 3.5 Flash Vision" else "Chưa cấu hình API Key",
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Bạn có thể lấy Gemini API Key miễn phí tại Google AI Studio (aistudio.google.com). Ứng dụng dùng mô hình Gemini 3.5 Flash tốc độ cao.",
+                    text = "API Key giúp AI phân tích ảnh chụp màn hình lịch học hoàn toàn riêng tư trên tài khoản của bạn.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
-
                 Button(
                     onClick = { viewModel.setShowApiKeyDialog(true) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("settings_open_api_key_btn"),
+                        .testTag("manage_api_key_btn"),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (isKeyConfigured) "Thay Đổi API Key" else "Nhập API Key Của Bạn")
+                    Text(if (isKeyConfigured) "Thay Đổi API Key" else "Nhập Gemini API Key Ngay")
                 }
             }
         }
 
-        // Section 2: Google Calendar Integration
+        // Section 2: Backup & Import/Export
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
@@ -178,14 +200,14 @@ fun SettingsScreen(
             Column(modifier = Modifier.padding(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.CalendarMonth,
+                        imageVector = Icons.Default.FileUpload,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Đồng Bộ Với Lịch Google",
+                        text = "Sao Lưu & Xuất / Nhập Lịch",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -193,57 +215,54 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Chuyển toàn bộ thời khóa biểu vào Google Calendar với chu kỳ lặp lại (hàng tuần, hàng tháng, hàng năm) và tự động nhận chuông báo trước giờ học trên mọi thiết bị.",
+                    text = "Dễ dàng xuất lịch ra file để lưu trữ an toàn hoặc nhập lại lịch đã xuất trước đó vào máy.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Button(
-                    onClick = {
-                        calendarPermissionsLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.READ_CALENDAR,
-                                Manifest.permission.WRITE_CALENDAR
-                            )
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("sync_all_google_cal_btn"),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = RoundedCornerShape(12.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Đồng Bộ Trực Tiếp Vào Google Calendar")
-                }
+                    // Export JSON
+                    Button(
+                        onClick = {
+                            val ok = ScheduleBackupHelper.shareJsonBackup(context, state.schedules)
+                            if (!ok) {
+                                Toast.makeText(context, "Chưa có môn học nào để xuất sao lưu.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("export_backup_json_btn"),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Xuất File Lịch")
+                    }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedButton(
-                    onClick = {
-                        val shared = GoogleCalendarHelper.shareIcsExport(context, state.schedules)
-                        if (!shared) {
-                            Toast.makeText(context, "Chưa có môn học nào để xuất lịch.", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("export_ics_btn"),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Xuất & Chia Sẻ File Lịch (.ics)")
+                    // Import JSON
+                    OutlinedButton(
+                        onClick = {
+                            importFileLauncher.launch("*/*")
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("import_backup_json_btn"),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Nhập File Lịch")
+                    }
                 }
             }
         }
 
-        // Section 3: Notification & Reminders
+        // Section 3: Notification & Reminders (FIX NOTIFICATION)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
@@ -274,7 +293,15 @@ fun SettingsScreen(
                         checked = state.isNotificationsEnabled,
                         onCheckedChange = { checked ->
                             if (checked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                val hasPerm = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (!hasPerm) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    viewModel.toggleNotifications(true)
+                                }
                             } else {
                                 viewModel.toggleNotifications(checked)
                             }
@@ -308,31 +335,158 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                OutlinedButton(
+                // Instant Test Notification button (Guaranteed to pop up heads-up notification)
+                Button(
                     onClick = {
-                        val testIntent = Intent(context, ScheduleAlarmReceiver::class.java).apply {
-                            putExtra(ScheduleAlarmReceiver.EXTRA_ITEM_ID, 99999L)
-                            putExtra(ScheduleAlarmReceiver.EXTRA_TITLE, "Thử nghiệm: Lập Trình Di Động")
-                            putExtra(ScheduleAlarmReceiver.EXTRA_ROOM, "Phòng B204")
-                            putExtra(ScheduleAlarmReceiver.EXTRA_START_TIME, "08:00")
-                            putExtra(ScheduleAlarmReceiver.EXTRA_MINUTES_BEFORE, 15)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            val hasPerm = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (!hasPerm) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                return@Button
+                            }
                         }
-                        context.sendBroadcast(testIntent)
-                        Toast.makeText(context, "Đã gửi thông báo thử nghiệm!", Toast.LENGTH_SHORT).show()
+                        viewModel.triggerInstantTestNotification()
+                        Toast.makeText(context, "🔔 Đã hiện thông báo nổi trên đầu màn hình!", Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("test_notification_btn"),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiary
+                    ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Kiểm Tra Báo Chuông Ngay")
+                    Text("🔔 Kiểm Tra Báo Chuông Ngay (Hiện Thông Báo Nổi)")
                 }
             }
         }
 
-        // Section 4: Data Management & Sample Data
+        // Section 4: Home Screen Widget Info
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Widgets,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Widget Đếm Ngược Màn Hình Chính",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Ứng dụng đã tích hợp sẵn Widget đếm ngược từng giây (14p 59s -> 14p 58s...) đến tiết học kế tiếp:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "👉 Cách thêm Widget ra màn hình chính:\n" +
+                                    "1. Ra màn hình chính của điện thoại.\n" +
+                                    "2. Nhấn giữ vào khoảng trống trên màn hình.\n" +
+                                    "3. Chọn mục \"Widgets\" (Tiện ích).\n" +
+                                    "4. Tìm ứng dụng \"Thời Khóa Biểu AI\" và kéo widget ra màn hình.",
+                            style = MaterialTheme.typography.bodySmall,
+                            lineHeight = 20.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Section 5: Google Calendar Sync
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Đồng Bộ Với Lịch Google",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Chuyển toàn bộ thời khóa biểu vào Google Calendar với chu kỳ lặp lại và tự động nhận chuông báo trên mọi thiết bị.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Button(
+                    onClick = {
+                        calendarPermissionsLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.READ_CALENDAR,
+                                Manifest.permission.WRITE_CALENDAR
+                            )
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("sync_all_google_cal_btn"),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Đồng Bộ Trực Tiếp Vào Google Calendar")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        val shared = GoogleCalendarHelper.shareIcsExport(context, state.schedules)
+                        if (!shared) {
+                            Toast.makeText(context, "Chưa có môn học nào để xuất lịch.", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("export_ics_btn"),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Xuất File Lịch (.ics)")
+                }
+            }
+        }
+
+        // Section 6: Data Reset
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
@@ -381,6 +535,44 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(40.dp))
     }
 
+    // Confirmation dialog for importing backup
+    importedItemsPending?.let { itemsToImport ->
+        AlertDialog(
+            onDismissRequest = { importedItemsPending = null },
+            title = { Text("Nhập file thời khóa biểu") },
+            text = {
+                Text("Tìm thấy ${itemsToImport.size} môn học trong file sao lưu.\nBạn muốn gộp thêm vào lịch học hiện tại hay ghi đè thay thế toàn bộ?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.importBackup(itemsToImport, replaceExisting = false)
+                        importedItemsPending = null
+                    }
+                ) {
+                    Text("Gộp thêm")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            viewModel.importBackup(itemsToImport, replaceExisting = true)
+                            importedItemsPending = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Ghi đè tất cả")
+                    }
+                    OutlinedButton(onClick = { importedItemsPending = null }) {
+                        Text("Hủy")
+                    }
+                }
+            }
+        )
+    }
+
+    // Confirmation dialog for clearing all
     if (showClearConfirmation) {
         AlertDialog(
             onDismissRequest = { showClearConfirmation = false },
