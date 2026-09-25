@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">Thời Khóa Biểu</string>
+    <string name="title_timetable">Thời Khóa Biểu</string>
+    <string name="title_schedule">Lịch Học &amp; Sự Kiện</string>
+    <string name="title_scan_ai">Quét AI Bằng Ảnh</string>
+    <string name="title_settings">Cài Đặt</string>
+    <string name="title_google_calendar">Đồng Bộ Lịch Google</string>
+    <string name="button_add_manual">Thêm Môn Học</string>
+    <string name="button_scan_image">Chụp / Chọn Ảnh Lịch</string>
+    <string name="api_key_prompt">Cấu hình Gemini API Key</string>
+    <string name="api_key_hint">Nhập mã AI Studio API Key của bạn (AIza...)</string>
+    <string name="save">Lưu</string>
+    <string name="cancel">Hủy</string>
+    <string name="delete">Xóa</string>
+    <string name="edit">Chỉnh sửa</string>
+    <string name="sync_google_calendar">Thêm vào Google Calendar</string>
+    <string name="repeat_weekly">Lặp lại hàng tuần</string>
+    <string name="repeat_monthly">Lặp lại hàng tháng</string>
+    <string name="repeat_yearly">Lặp lại hàng năm</string>
+    <string name="repeat_none">Không lặp lại</string>
+    <string name="reminder_title">Nhắc nhở lịch học</string>
+    <string name="reminder_before_10m">Trước 10 phút</string>
+    <string name="reminder_before_15m">Trước 15 phút</string>
+    <string name="reminder_before_30m">Trước 30 phút</string>
+    <string name="reminder_before_1h">Trước 1 giờ</string>
+</resources>

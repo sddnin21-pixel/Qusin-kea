@@ -1,0 +1,6 @@
+{
+  "name": "Thời Khóa Biểu AI",
+  "description": "Ứng dụng thời khóa biểu thông minh tích hợp Gemini AI: chụp ảnh quét thời khóa biểu, lập lịch học lặp lại theo tuần/tháng/năm, nhắc nhở thông minh và đồng bộ Lịch Google.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
