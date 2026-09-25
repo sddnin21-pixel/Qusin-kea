@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Screenshot
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -52,11 +53,15 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import com.example.data.service.GeminiScheduleParser
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -221,6 +226,80 @@ fun ScanScheduleScreen(
                     Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(if (state.apiKey.isNotBlank()) "Đổi Key" else "Nhập Key", fontSize = 12.sp)
+                }
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 14.dp),
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.15f)
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Mô hình AI:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Text(
+                        text = when (state.selectedModel) {
+                            "gemini-3.1-flash-lite-preview" -> "Gemini 3.1 Flash Lite"
+                            "gemini-3.5-flash" -> "Gemini 3.5 Flash"
+                            "gemini-3.5-flash-lite-preview" -> "Gemini 3.5 Flash Lite"
+                            "gemini-3.6-flash-preview" -> "Gemini 3.6 Flash"
+                            else -> state.selectedModel
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    GeminiScheduleParser.SUPPORTED_MODELS.forEach { modelOpt ->
+                        val isSelected = state.selectedModel == modelOpt.id
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.setSelectedModel(modelOpt.id) },
+                            label = {
+                                Text(
+                                    text = "${modelOpt.displayName} (${modelOpt.badge})",
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            leadingIcon = if (isSelected) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            } else null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -620,20 +699,34 @@ fun ScanScheduleScreen(
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Button(
-                            onClick = { viewModel.setShowApiKeyDialog(true) },
-                            shape = RoundedCornerShape(10.dp)
+                            onClick = {
+                                if (currentBatchBitmaps.isNotEmpty()) {
+                                    viewModel.scanMultipleImages(currentBatchBitmaps)
+                                } else if (selectedBitmap != null) {
+                                    viewModel.scanImage(selectedBitmap!!)
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Text("Nhập API Key")
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Thử Lại Ngay")
                         }
+
                         OutlinedButton(
                             onClick = {
                                 viewModel.scanSampleScreenshotDemo(selectedSampleIndex ?: 1, selectedBitmap)
                             },
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Text("Thử nghiệm Demo")
+                            Text("Xem Mẫu Demo")
                         }
                     }
                 }

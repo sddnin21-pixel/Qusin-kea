@@ -13,6 +13,16 @@ class PreferencesManager(context: Context) {
         private const val KEY_DEFAULT_REMINDER_MINUTES = "default_reminder_minutes"
         private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
         private const val KEY_FIRST_LAUNCH = "first_launch"
+        private const val KEY_SELECTED_MODEL = "selected_gemini_model"
+        const val DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
+    }
+
+    fun getSelectedModel(): String {
+        return prefs.getString(KEY_SELECTED_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL
+    }
+
+    fun setSelectedModel(model: String) {
+        prefs.edit().putString(KEY_SELECTED_MODEL, model.trim()).apply()
     }
 
     fun getApiKey(): String {

@@ -33,7 +33,8 @@ data class TimetableUiState(
     val snackbarMessage: String? = null,
     val isEditingOrAddingItem: ScheduleItem? = null,
     val isAddingNew: Boolean = false,
-    val showApiKeyDialog: Boolean = false
+    val showApiKeyDialog: Boolean = false,
+    val selectedModel: String = PreferencesManager.DEFAULT_MODEL
 )
 
 class TimetableViewModel(application: Application) : AndroidViewModel(application) {
@@ -47,7 +48,8 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             apiKey = prefs.getApiKey(),
             customApiKeyOnly = prefs.getCustomApiKeyOnly(),
             defaultReminderMinutes = prefs.getDefaultReminderMinutes(),
-            isNotificationsEnabled = prefs.isNotificationsEnabled()
+            isNotificationsEnabled = prefs.isNotificationsEnabled(),
+            selectedModel = prefs.getSelectedModel()
         )
     )
     val uiState: StateFlow<TimetableUiState> = _uiState.asStateFlow()
@@ -107,6 +109,19 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setShowApiKeyDialog(show: Boolean) {
         _uiState.update { it.copy(showApiKeyDialog = show) }
+    }
+
+    fun setSelectedModel(model: String) {
+        prefs.setSelectedModel(model)
+        _uiState.update { it.copy(selectedModel = model) }
+        val modelName = when (model) {
+            "gemini-3.1-flash-lite-preview" -> "Gemini 3.1 Flash Lite"
+            "gemini-3.5-flash" -> "Gemini 3.5 Flash"
+            "gemini-3.5-flash-lite-preview" -> "Gemini 3.5 Flash Lite"
+            "gemini-3.6-flash-preview" -> "Gemini 3.6 Flash"
+            else -> model
+        }
+        showSnackbar("Đã chọn mô hình: $modelName")
     }
 
     fun openAddDialog() {
@@ -212,7 +227,8 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             val result = geminiParser.parseTimetableImage(
                 apiKey = apiKey,
                 bitmap = bitmap,
-                defaultReminderMinutes = prefs.getDefaultReminderMinutes()
+                defaultReminderMinutes = prefs.getDefaultReminderMinutes(),
+                preferredModel = _uiState.value.selectedModel
             )
             result.onSuccess { items ->
                 _uiState.update {
@@ -266,48 +282,40 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         }
 
         viewModelScope.launch {
-            val aggregated = mutableListOf<ScheduleItem>()
-            var hadError = false
-            var lastErrorMsg = ""
-
-            for (index in bitmaps.indices) {
-                val currentBmp = bitmaps[index]
-                _uiState.update {
-                    it.copy(
-                        batchProgressText = "Đang phân tích ảnh ${index + 1}/${bitmaps.size} bằng Gemini Vision..."
-                    )
-                }
-
-                val result = geminiParser.parseTimetableImage(
-                    apiKey = apiKey,
-                    bitmap = currentBmp,
-                    defaultReminderMinutes = prefs.getDefaultReminderMinutes()
-                )
-
-                result.onSuccess { items ->
-                    aggregated.addAll(items)
-                }.onFailure { err ->
-                    hadError = true
-                    lastErrorMsg = err.message ?: "Lỗi ở ảnh ${index + 1}"
-                }
-            }
-
-            // Deduplicate items based on title, dayOfWeek and startTime
-            val distinctItems = aggregated.distinctBy {
-                "${it.title.lowercase().trim()}_${it.dayOfWeek}_${it.startTime}"
-            }
-
             _uiState.update {
                 it.copy(
-                    isScanning = false,
-                    extractedItems = distinctItems,
-                    batchProgressText = "",
-                    scanError = if (distinctItems.isEmpty() && hadError) lastErrorMsg else null
+                    batchProgressText = "Gemini AI đang phân tích toàn bộ ${bitmaps.size} ảnh cùng lúc..."
                 )
             }
 
-            if (distinctItems.isNotEmpty()) {
-                showSnackbar("Đã bóc tách thành công tổng cộng ${distinctItems.size} môn từ ${bitmaps.size} ảnh!")
+            val result = geminiParser.parseMultipleTimetableImages(
+                apiKey = apiKey,
+                bitmaps = bitmaps,
+                defaultReminderMinutes = prefs.getDefaultReminderMinutes(),
+                preferredModel = _uiState.value.selectedModel
+            )
+
+            result.onSuccess { items ->
+                val distinctItems = items.distinctBy {
+                    "${it.title.lowercase().trim()}_${it.dayOfWeek}_${it.startTime}"
+                }
+                _uiState.update {
+                    it.copy(
+                        isScanning = false,
+                        extractedItems = distinctItems,
+                        batchProgressText = "",
+                        scanError = null
+                    )
+                }
+                showSnackbar("Đã bóc tách thành công ${distinctItems.size} môn từ ${bitmaps.size} ảnh!")
+            }.onFailure { err ->
+                _uiState.update {
+                    it.copy(
+                        isScanning = false,
+                        scanError = err.message ?: "Không thể phân tích ảnh.",
+                        batchProgressText = ""
+                    )
+                }
             }
         }
     }
