@@ -37,20 +37,21 @@ class TimetableCountdownWidgetProvider : AppWidgetProvider() {
         }
 
         // 2. Asynchronously query Room DB and bind live schedule data
-        val pendingResult = goAsync()
+        val pendingResult = try { goAsync() } catch (e: Exception) { null }
         updateWidgetsAsync(context, appWidgetManager, appWidgetIds, pendingResult)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         val action = intent.action ?: return
-        if (action == ACTION_UPDATE_WIDGET || action == AppWidgetManager.ACTION_APPWIDGET_UPDATE) {
+        // Note: AppWidgetManager.ACTION_APPWIDGET_UPDATE is already handled by super.onReceive -> onUpdate
+        if (action == ACTION_UPDATE_WIDGET) {
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val ids = appWidgetManager.getAppWidgetIds(
                 ComponentName(context, TimetableCountdownWidgetProvider::class.java)
             )
             if (ids.isNotEmpty()) {
-                val pendingResult = goAsync()
+                val pendingResult = try { goAsync() } catch (e: Exception) { null }
                 updateWidgetsAsync(context, appWidgetManager, ids, pendingResult)
             }
         }
@@ -85,8 +86,11 @@ class TimetableCountdownWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
             views.setTextViewText(R.id.widget_header_title, "⏳ THỜI KHÓA BIỂU")
             views.setTextViewText(R.id.widget_room, "Đang tải...")
-            views.setTextViewText(R.id.widget_class_title, "Đang kết nối lịch học...")
+            views.setTextViewText(R.id.widget_class_title, "Đang nạp thời khóa biểu...")
             views.setTextViewText(R.id.widget_time_lecturer, "Chạm để mở ứng dụng")
+            views.setTextViewText(R.id.widget_flipper_title2, "Thời khóa biểu AI")
+            views.setTextViewText(R.id.widget_flipper_sub2, "Tự động đếm ngược giờ học")
+            views.setViewVisibility(R.id.widget_progress_bar, View.GONE)
             views.setViewVisibility(R.id.widget_countdown_container, View.GONE)
             return views
         }
@@ -95,7 +99,7 @@ class TimetableCountdownWidgetProvider : AppWidgetProvider() {
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetIds: IntArray,
-            pendingResult: BroadcastReceiver.PendingResult
+            pendingResult: BroadcastReceiver.PendingResult?
         ) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
@@ -127,6 +131,15 @@ class TimetableCountdownWidgetProvider : AppWidgetProvider() {
                         views.setTextViewText(R.id.widget_room, widgetState.room)
                         views.setTextViewText(R.id.widget_class_title, widgetState.title)
                         views.setTextViewText(R.id.widget_time_lecturer, widgetState.subtitle)
+                        views.setTextViewText(R.id.widget_flipper_title2, widgetState.secondaryTitle)
+                        views.setTextViewText(R.id.widget_flipper_sub2, widgetState.secondarySubtitle)
+
+                        if (widgetState.progressPercent >= 0) {
+                            views.setViewVisibility(R.id.widget_progress_bar, View.VISIBLE)
+                            views.setProgressBar(R.id.widget_progress_bar, 100, widgetState.progressPercent, false)
+                        } else {
+                            views.setViewVisibility(R.id.widget_progress_bar, View.GONE)
+                        }
 
                         if (widgetState.hasCountdown && widgetState.remainingMs > 0) {
                             views.setViewVisibility(R.id.widget_countdown_container, View.VISIBLE)
@@ -152,7 +165,11 @@ class TimetableCountdownWidgetProvider : AppWidgetProvider() {
                 } catch (e: Exception) {
                     Log.e(TAG, "Error updating widgets", e)
                 } finally {
-                    pendingResult.finish()
+                    try {
+                        pendingResult?.finish()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error finishing pendingResult", e)
+                    }
                 }
             }
         }
@@ -162,9 +179,12 @@ class TimetableCountdownWidgetProvider : AppWidgetProvider() {
             val room: String,
             val title: String,
             val subtitle: String,
+            val secondaryTitle: String = "Thông tin chi tiết",
+            val secondarySubtitle: String = "",
             val hasCountdown: Boolean,
             val countdownLabel: String = "",
-            val remainingMs: Long = 0L
+            val remainingMs: Long = 0L,
+            val progressPercent: Int = -1
         )
 
         private fun computeWidgetState(schedules: List<ScheduleItem>): WidgetDisplayData {
@@ -174,7 +194,10 @@ class TimetableCountdownWidgetProvider : AppWidgetProvider() {
                     room = "Trống",
                     title = "Chưa có môn học nào",
                     subtitle = "Chạm để thêm hoặc quét lịch bằng AI",
-                    hasCountdown = false
+                    secondaryTitle = "Nhận diện bằng AI",
+                    secondarySubtitle = "Chụp hoặc chọn ảnh màn hình TKB",
+                    hasCountdown = false,
+                    progressPercent = -1
                 )
             }
 
@@ -201,15 +224,23 @@ class TimetableCountdownWidgetProvider : AppWidgetProvider() {
                 val endMin = parseMinutes(item.endTime) ?: (startMin + 45)
                 if (currentMinutes in startMin until endMin) {
                     val remainingMs = ((endMin - currentMinutes) * 60 - currentSeconds) * 1000L
+                    val totalDurationMin = (endMin - startMin).coerceAtLeast(1)
+                    val elapsedMin = (currentMinutes - startMin).coerceAtLeast(0)
+                    val percent = ((elapsedMin.toFloat() / totalDurationMin) * 100).toInt().coerceIn(0, 100)
+
                     val gv = if (item.lecturer.isNotBlank()) " • GV: ${item.lecturer}" else ""
+                    val notes = if (item.notes.isNotBlank()) " • ${item.notes}" else ""
                     return WidgetDisplayData(
                         header = "🔴 ĐANG DIỄN RA",
                         room = if (item.room.isNotBlank()) item.room else "Lớp học",
                         title = item.title,
                         subtitle = "${item.startTime} - ${item.endTime}$gv",
+                        secondaryTitle = "Phòng: ${if (item.room.isNotBlank()) item.room else "Lớp học"}",
+                        secondarySubtitle = "Đã học: $percent%$notes",
                         hasCountdown = true,
                         countdownLabel = "Kết thúc sau: ",
-                        remainingMs = if (remainingMs > 0) remainingMs else 1000L
+                        remainingMs = if (remainingMs > 0) remainingMs else 1000L,
+                        progressPercent = percent
                     )
                 }
             }
@@ -228,14 +259,21 @@ class TimetableCountdownWidgetProvider : AppWidgetProvider() {
             if (nextToday != null) {
                 val (item, remainingMs) = nextToday
                 val gv = if (item.lecturer.isNotBlank()) " • GV: ${item.lecturer}" else ""
+                val notes = if (item.notes.isNotBlank()) " • ${item.notes}" else ""
+                val startMin = parseMinutes(item.startTime) ?: 0
+                val remainingCount = todayClasses.count { (parseMinutes(it.startTime) ?: 0) >= startMin }
+
                 return WidgetDisplayData(
-                    header = "⏳ TIẾT HỌC TIẾP THEO",
+                    header = "⏳ TIẾT TIẾP THEO",
                     room = if (item.room.isNotBlank()) item.room else "Lớp học",
                     title = item.title,
                     subtitle = "${item.startTime} - ${item.endTime}$gv",
+                    secondaryTitle = "Hôm nay còn $remainingCount môn học",
+                    secondarySubtitle = "Phòng: ${if (item.room.isNotBlank()) item.room else "Lớp học"}$notes",
                     hasCountdown = true,
                     countdownLabel = "Bắt đầu sau: ",
-                    remainingMs = remainingMs
+                    remainingMs = remainingMs,
+                    progressPercent = -1
                 )
             }
 
@@ -265,24 +303,31 @@ class TimetableCountdownWidgetProvider : AppWidgetProvider() {
                     }
                     val remainingMs = targetTime.timeInMillis - now.timeInMillis
                     val gv = if (earliest.lecturer.isNotBlank()) " • GV: ${earliest.lecturer}" else ""
+                    val notes = if (earliest.notes.isNotBlank()) " • ${earliest.notes}" else ""
                     return WidgetDisplayData(
-                        header = "📅 TIẾT TIẾP THEO ($dayName)",
+                        header = "📅 TIẾT TIẾP ($dayName)",
                         room = if (earliest.room.isNotBlank()) earliest.room else "Lớp học",
                         title = earliest.title,
                         subtitle = "${earliest.startTime} - ${earliest.endTime}$gv",
+                        secondaryTitle = "Tiết học kế tiếp: $dayName",
+                        secondarySubtitle = "Phòng: ${if (earliest.room.isNotBlank()) earliest.room else "Lớp học"}$notes",
                         hasCountdown = true,
                         countdownLabel = "Còn lại: ",
-                        remainingMs = remainingMs
+                        remainingMs = remainingMs,
+                        progressPercent = -1
                     )
                 }
             }
 
             return WidgetDisplayData(
-                header = "✨ THỜI KHÓA BIỂU",
+                header = "✨ XONG LỊCH HÔM NAY",
                 room = "Nghỉ ngơi",
                 title = "Hôm nay không còn tiết học",
                 subtitle = "Chạm để xem toàn bộ lịch tuần",
-                hasCountdown = false
+                secondaryTitle = "Thư giãn & nghỉ ngơi!",
+                secondarySubtitle = "Chạm để quản lý thời khóa biểu",
+                hasCountdown = false,
+                progressPercent = -1
             )
         }
 
