@@ -201,6 +201,37 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun setPreviewBitmapOnly(bitmap: Bitmap?) {
+        _uiState.update { it.copy(previewBitmap = bitmap, scanError = null) }
+    }
+
+    fun scanSampleScreenshotDemo(sampleIndex: Int, bitmap: Bitmap? = null) {
+        _uiState.update {
+            it.copy(
+                previewBitmap = bitmap ?: it.previewBitmap,
+                isScanning = true,
+                scanError = null,
+                extractedItems = emptyList()
+            )
+        }
+
+        viewModelScope.launch {
+            // Simulate brief intelligent processing
+            kotlinx.coroutines.delay(1200)
+            val items = geminiParser.getDemoParsedItemsForScreenshot(
+                sampleIndex = sampleIndex,
+                defaultReminderMinutes = prefs.getDefaultReminderMinutes()
+            )
+            _uiState.update {
+                it.copy(
+                    isScanning = false,
+                    extractedItems = items
+                )
+            }
+            showSnackbar("AI đã nhận dạng thành công ${items.size} môn học từ ảnh chụp màn hình!")
+        }
+    }
+
     fun confirmExtractedItems(selectedItems: List<ScheduleItem>) {
         if (selectedItems.isEmpty()) return
         viewModelScope.launch {

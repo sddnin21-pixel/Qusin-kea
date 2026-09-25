@@ -257,4 +257,122 @@ Hãy trả về một mảng JSON các đối tượng. Ví dụ:
 
         return items
     }
+
+    fun getDemoParsedItemsForScreenshot(sampleIndex: Int, defaultReminderMinutes: Int): List<ScheduleItem> {
+        return if (sampleIndex == 1) {
+            listOf(
+                ScheduleItem(
+                    title = "Toán Cao Cấp & Giải Tích",
+                    lecturer = "PGS.TS. Trần Đình Nam",
+                    room = "B204",
+                    dayOfWeek = 1,
+                    startTime = "07:30",
+                    endTime = "09:30",
+                    repeatType = RepeatType.WEEKLY.name,
+                    colorHex = "#2563EB",
+                    notes = "Mang tài liệu bài giảng phần Đạo hàm",
+                    reminderMinutesBefore = defaultReminderMinutes
+                ),
+                ScheduleItem(
+                    title = "Lập Trình Di Động (Android Kotlin)",
+                    lecturer = "ThS. Hoàng Quốc Bảo",
+                    room = "Lab 4.2",
+                    dayOfWeek = 2,
+                    startTime = "09:45",
+                    endTime = "11:45",
+                    repeatType = RepeatType.WEEKLY.name,
+                    colorHex = "#10B981",
+                    notes = "Mang laptop đã cài Android Studio",
+                    reminderMinutesBefore = defaultReminderMinutes
+                ),
+                ScheduleItem(
+                    title = "Tiếng Anh Chuyên Ngành CNTT",
+                    lecturer = "Ms. Sarah Jenkins",
+                    room = "A101",
+                    dayOfWeek = 3,
+                    startTime = "13:30",
+                    endTime = "15:30",
+                    repeatType = RepeatType.WEEKLY.name,
+                    colorHex = "#8B5CF6",
+                    notes = "Thuyết trình nhóm Unit 4",
+                    reminderMinutesBefore = defaultReminderMinutes
+                ),
+                ScheduleItem(
+                    title = "Cấu Trúc Dữ Liệu & Giải Thuật",
+                    lecturer = "TS. Lê Quang Huy",
+                    room = "C302",
+                    dayOfWeek = 4,
+                    startTime = "08:00",
+                    endTime = "10:30",
+                    repeatType = RepeatType.WEEKLY.name,
+                    colorHex = "#F59E0B",
+                    notes = "Kiểm tra giữa kỳ phần Cây nhị phân",
+                    reminderMinutesBefore = defaultReminderMinutes
+                ),
+                ScheduleItem(
+                    title = "An Toàn & Bảo Mật Hệ Thống",
+                    lecturer = "ThS. Vũ Hải Đăng",
+                    room = "Hội trường 1",
+                    dayOfWeek = 5,
+                    startTime = "14:00",
+                    endTime = "16:30",
+                    repeatType = RepeatType.WEEKLY.name,
+                    colorHex = "#EC4899",
+                    notes = "Thực hành mã hóa AES & RSA",
+                    reminderMinutesBefore = defaultReminderMinutes
+                )
+            )
+        } else {
+            listOf(
+                ScheduleItem(
+                    title = "Cơ Sở Dữ Liệu & SQL",
+                    lecturer = "TS. Nguyễn Minh Châu",
+                    room = "D3-201",
+                    dayOfWeek = 1,
+                    startTime = "08:00",
+                    endTime = "10:15",
+                    repeatType = RepeatType.WEEKLY.name,
+                    colorHex = "#06B6D4",
+                    notes = "Bài tập chuẩn hóa 3NF",
+                    reminderMinutesBefore = defaultReminderMinutes
+                ),
+                ScheduleItem(
+                    title = "Mạng Máy Tính & Viễn Thông",
+                    lecturer = "ThS. Đỗ Thanh Tùng",
+                    room = "D3-105",
+                    dayOfWeek = 2,
+                    startTime = "13:00",
+                    endTime = "15:15",
+                    repeatType = RepeatType.WEEKLY.name,
+                    colorHex = "#14B8A6",
+                    notes = "Cấu hình Router Cisco Packet Tracer",
+                    reminderMinutesBefore = defaultReminderMinutes
+                ),
+                ScheduleItem(
+                    title = "Kiến Trúc Máy Tính & HĐH",
+                    lecturer = "PGS.TS. Phạm Văn Hòa",
+                    room = "D1-302",
+                    dayOfWeek = 4,
+                    startTime = "07:30",
+                    endTime = "09:45",
+                    repeatType = RepeatType.WEEKLY.name,
+                    colorHex = "#EF4444",
+                    notes = "Lập trình đa luồng POSIX threads",
+                    reminderMinutesBefore = defaultReminderMinutes
+                ),
+                ScheduleItem(
+                    title = "Trí Tuệ Nhân Tạo Ứng Dụng",
+                    lecturer = "TS. Bùi Gia Đức",
+                    room = "Phòng AI Lab",
+                    dayOfWeek = 5,
+                    startTime = "09:30",
+                    endTime = "11:45",
+                    repeatType = RepeatType.WEEKLY.name,
+                    colorHex = "#8B5CF6",
+                    notes = "Tìm hiểu LLM Gemini & Prompt Engineering",
+                    reminderMinutesBefore = defaultReminderMinutes
+                )
+            )
+        }
+    }
 }
