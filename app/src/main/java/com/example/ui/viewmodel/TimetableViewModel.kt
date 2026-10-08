@@ -4,17 +4,25 @@ import android.app.Application
 import android.graphics.Bitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.model.AttendanceRecord
+import com.example.data.model.AttendanceStatus
+import com.example.data.model.GradeRecord
 import com.example.data.model.ScheduleItem
 import com.example.data.repository.ScheduleRepository
 import com.example.data.service.GeminiScheduleParser
 import com.example.util.NotificationHelper
 import com.example.util.PreferencesManager
+import com.example.util.QrCodeHelper
+import com.example.widget.TimetableAgendaWidgetProvider
 import com.example.widget.TimetableCountdownWidgetProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class TimetableUiState(
     val schedules: List<ScheduleItem> = emptyList(),
@@ -34,7 +42,18 @@ data class TimetableUiState(
     val isEditingOrAddingItem: ScheduleItem? = null,
     val isAddingNew: Boolean = false,
     val showApiKeyDialog: Boolean = false,
-    val selectedModel: String = PreferencesManager.DEFAULT_MODEL
+    val selectedModel: String = PreferencesManager.DEFAULT_MODEL,
+    // New Feature 3: Wallpaper / Story Exporter
+    val showExportWallpaperDialog: Boolean = false,
+    // New Feature 5: Attendance & Grades / GPA
+    val attendanceRecords: List<AttendanceRecord> = emptyList(),
+    val gradeRecords: List<GradeRecord> = emptyList(),
+    val showGradeAttendanceDialog: Boolean = false,
+    // New Feature 6: QR Code Share & Scan
+    val showQrShareDialog: Boolean = false,
+    val qrBitmap: Bitmap? = null,
+    val qrDecodedPreviewItems: List<ScheduleItem>? = null,
+    val qrError: String? = null
 )
 
 class TimetableViewModel(application: Application) : AndroidViewModel(application) {
@@ -69,8 +88,23 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
                         filteredSchedules = filtered
                     )
                 }
-                // Refresh widget whenever data changes
+                // Refresh widgets whenever data changes
                 TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
+                TimetableAgendaWidgetProvider.updateAllWidgets(getApplication())
+            }
+        }
+
+        // Collect attendance
+        viewModelScope.launch {
+            repository.allAttendance.collect { records ->
+                _uiState.update { it.copy(attendanceRecords = records) }
+            }
+        }
+
+        // Collect grades
+        viewModelScope.launch {
+            repository.allGrades.collect { grades ->
+                _uiState.update { it.copy(gradeRecords = grades) }
             }
         }
 
@@ -80,6 +114,7 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
                 repository.seedSampleDataIfEmpty()
                 prefs.setFirstLaunchCompleted()
                 TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
+                TimetableAgendaWidgetProvider.updateAllWidgets(getApplication())
             }
         }
     }
@@ -425,5 +460,162 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun clearSnackbar() {
         _uiState.update { it.copy(snackbarMessage = null) }
+    }
+
+    // --- FEATURE 3: WALLPAPER EXPORT ---
+    fun setShowExportWallpaperDialog(show: Boolean) {
+        _uiState.update { it.copy(showExportWallpaperDialog = show) }
+    }
+
+    // --- FEATURE 5: ATTENDANCE & GRADES / GPA ---
+    fun setShowGradeAttendanceDialog(show: Boolean) {
+        _uiState.update { it.copy(showGradeAttendanceDialog = show) }
+    }
+
+    fun markAttendance(scheduleId: Long, subjectTitle: String, status: AttendanceStatus, note: String = "") {
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        viewModelScope.launch {
+            val record = AttendanceRecord(
+                scheduleId = scheduleId,
+                subjectTitle = subjectTitle,
+                date = todayStr,
+                status = status.name,
+                note = note
+            )
+            repository.insertAttendance(record)
+            showSnackbar("Đã điểm danh '${subjectTitle}': ${status.labelVi}")
+        }
+    }
+
+    fun deleteAttendance(id: Long) {
+        viewModelScope.launch {
+            repository.deleteAttendance(id)
+            showSnackbar("Đã xóa bản ghi điểm danh.")
+        }
+    }
+
+    fun saveGrade(grade: GradeRecord) {
+        viewModelScope.launch {
+            repository.saveGrade(grade)
+            showSnackbar("Đã lưu điểm môn '${grade.subjectTitle}'")
+        }
+    }
+
+    fun deleteGrade(grade: GradeRecord) {
+        viewModelScope.launch {
+            repository.deleteGrade(grade)
+            showSnackbar("Đã xóa điểm môn '${grade.subjectTitle}'")
+        }
+    }
+
+    // --- FEATURE 6: QR CODE SHARE & IMPORT ---
+    fun setShowQrShareDialog(show: Boolean) {
+        _uiState.update {
+            it.copy(
+                showQrShareDialog = show,
+                qrError = null,
+                qrDecodedPreviewItems = if (!show) null else it.qrDecodedPreviewItems
+            )
+        }
+        if (show) {
+            generateQrCode()
+        }
+    }
+
+    fun generateQrCode() {
+        val currentSchedules = _uiState.value.schedules
+        if (currentSchedules.isEmpty()) {
+            _uiState.update { it.copy(qrBitmap = null, qrError = "Thời khóa biểu đang trống, chưa có môn học để tạo mã QR.") }
+            return
+        }
+        try {
+            val qrText = QrCodeHelper.encodeTimetable(currentSchedules)
+            val bitmap = QrCodeHelper.generateQrBitmap(qrText, width = 600, height = 600)
+            _uiState.update { it.copy(qrBitmap = bitmap, qrError = null) }
+        } catch (e: Exception) {
+            _uiState.update { it.copy(qrBitmap = null, qrError = "Không thể tạo mã QR: ${e.message}") }
+        }
+    }
+
+    fun decodeQrFromImage(bitmap: Bitmap) {
+        try {
+            val rawText = QrCodeHelper.decodeQrFromBitmap(bitmap)
+            if (rawText != null) {
+                val items = QrCodeHelper.decodeTimetable(rawText)
+                if (!items.isNullOrEmpty()) {
+                    _uiState.update {
+                        it.copy(
+                            qrDecodedPreviewItems = items,
+                            qrError = null
+                        )
+                    }
+                    showSnackbar("Tìm thấy ${items.size} môn học từ mã QR!")
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            qrError = "Mã QR hợp lệ nhưng không phải định dạng Thời Khóa Biểu của ứng dụng.",
+                            qrDecodedPreviewItems = null
+                        )
+                    }
+                }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        qrError = "Không nhận diện được mã QR trong bức ảnh này. Vui lòng chọn ảnh chụp rõ nét hơn.",
+                        qrDecodedPreviewItems = null
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            _uiState.update {
+                it.copy(
+                    qrError = "Lỗi đọc ảnh QR: ${e.message}",
+                    qrDecodedPreviewItems = null
+                )
+            }
+        }
+    }
+
+    fun decodeQrFromText(codeText: String) {
+        val items = QrCodeHelper.decodeTimetable(codeText)
+        if (!items.isNullOrEmpty()) {
+            _uiState.update {
+                it.copy(
+                    qrDecodedPreviewItems = items,
+                    qrError = null
+                )
+            }
+            showSnackbar("Đã giải mã thành công ${items.size} môn học!")
+        } else {
+            _uiState.update {
+                it.copy(
+                    qrError = "Mã chia sẻ không đúng định dạng. Vui lòng kiểm tra lại.",
+                    qrDecodedPreviewItems = null
+                )
+            }
+        }
+    }
+
+    fun clearQrPreview() {
+        _uiState.update { it.copy(qrDecodedPreviewItems = null, qrError = null) }
+    }
+
+    fun confirmImportQrItems(replaceExisting: Boolean) {
+        val itemsToImport = _uiState.value.qrDecodedPreviewItems ?: return
+        viewModelScope.launch {
+            if (replaceExisting) {
+                repository.clearAll()
+            }
+            repository.insertAll(itemsToImport)
+            _uiState.update {
+                it.copy(
+                    qrDecodedPreviewItems = null,
+                    showQrShareDialog = false
+                )
+            }
+            showSnackbar("Đã nhập thành công ${itemsToImport.size} môn học từ mã QR!")
+            TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
+            TimetableAgendaWidgetProvider.updateAllWidgets(getApplication())
+        }
     }
 }

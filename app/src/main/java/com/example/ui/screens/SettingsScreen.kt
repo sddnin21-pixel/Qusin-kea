@@ -34,11 +34,14 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Grade
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.AlertDialog
@@ -463,11 +466,14 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Ứng dụng đã tích hợp sẵn Widget đếm ngược từng giây (14p 59s -> 14p 58s...) đến tiết học kế tiếp:",
+                    text = "Ứng dụng hỗ trợ 2 kiểu dáng Widget tiện ích hiện đại trên màn hình chính:\n" +
+                            "• Widget Đếm Ngược (2x1): Tự động đếm lùi từng giây và hiệu ứng lướt chuyển thông tin mượt mà.\n" +
+                            "• Widget Lịch Ngày (4x2 / 4x1): Xem danh sách các môn học hôm nay và ngày mai kèm trạng thái tiết học.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 18.sp
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
                     shape = RoundedCornerShape(10.dp),
@@ -479,11 +485,74 @@ fun SettingsScreen(
                                     "1. Ra màn hình chính của điện thoại.\n" +
                                     "2. Nhấn giữ vào khoảng trống trên màn hình.\n" +
                                     "3. Chọn mục \"Widgets\" (Tiện ích).\n" +
-                                    "4. Tìm ứng dụng \"Thời Khóa Biểu AI\" và kéo widget ra màn hình.",
+                                    "4. Tìm \"Thời Khóa Biểu AI\" và chọn kiểu dáng Widget bạn thích.",
                             style = MaterialTheme.typography.bodySmall,
                             lineHeight = 20.sp
                         )
                     }
+                }
+            }
+        }
+
+        // Section: New Features (Wallpaper, QR Share, GPA & Attendance)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Công Cụ Mở Rộng Dành Cho Học Sinh / Sinh Viên",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Feature 3: Export Wallpaper
+                OutlinedButton(
+                    onClick = { viewModel.setShowExportWallpaperDialog(true) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Wallpaper, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Xuất Ảnh Nền Khóa 9:16 & Story Instagram/FB")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Feature 6: QR Code
+                OutlinedButton(
+                    onClick = { viewModel.setShowQrShareDialog(true) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.secondary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Tạo / Quét Mã QR Chia Sẻ Lịch Cả Lớp")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Feature 5: GPA & Attendance
+                OutlinedButton(
+                    onClick = { viewModel.setShowGradeAttendanceDialog(true) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Grade, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFFF59E0B))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Quản Lý Điểm Số, GPA & Cảnh Báo Vắng Học")
                 }
             }
         }

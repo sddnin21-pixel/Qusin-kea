@@ -28,11 +28,14 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Grade
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -109,6 +112,48 @@ fun TimetableScreen(
             onQuickAdd = { viewModel.openAddDialog() },
             onQuickScan = onNavigateToScan
         )
+
+        // Quick Actions Row: Wallpaper 9:16 | QR Code Cả Lớp | Điểm & GPA
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                SuggestionChip(
+                    onClick = { viewModel.setShowExportWallpaperDialog(true) },
+                    icon = { Icon(Icons.Default.Wallpaper, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary) },
+                    label = { Text("Ảnh Nền 9:16", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold) },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier.testTag("action_wallpaper")
+                )
+            }
+            item {
+                SuggestionChip(
+                    onClick = { viewModel.setShowQrShareDialog(true) },
+                    icon = { Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.secondary) },
+                    label = { Text("Mã QR Cả Lớp", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold) },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier.testTag("action_qr_share")
+                )
+            }
+            item {
+                SuggestionChip(
+                    onClick = { viewModel.setShowGradeAttendanceDialog(true) },
+                    icon = { Icon(Icons.Default.Grade, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFFF59E0B)) },
+                    label = { Text("Điểm & Điểm Danh", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold) },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = Color(0xFFF59E0B).copy(alpha = 0.15f)
+                    ),
+                    modifier = Modifier.testTag("action_grade_attendance")
+                )
+            }
+        }
 
         // Day of Week Filter Bar
         LazyRow(

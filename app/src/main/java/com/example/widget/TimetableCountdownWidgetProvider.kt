@@ -67,6 +67,7 @@ class TimetableCountdownWidgetProvider : AppWidgetProvider() {
                     action = ACTION_UPDATE_WIDGET
                 }
                 context.sendBroadcast(intent)
+                TimetableAgendaWidgetProvider.updateAllWidgets(context)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send update broadcast", e)
             }

@@ -12,10 +12,25 @@ import kotlinx.coroutines.flow.firstOrNull
 class ScheduleRepository(private val context: Context) {
     private val database = AppDatabase.getDatabase(context)
     private val scheduleDao = database.scheduleDao()
+    private val attendanceDao = database.attendanceDao()
+    private val gradeDao = database.gradeDao()
     private val notificationHelper = NotificationHelper(context)
     private val prefs = PreferencesManager(context)
 
     val allSchedules: Flow<List<ScheduleItem>> = scheduleDao.getAllSchedules()
+    val allAttendance: Flow<List<com.example.data.model.AttendanceRecord>> = attendanceDao.getAllAttendance()
+    val allGrades: Flow<List<com.example.data.model.GradeRecord>> = gradeDao.getAllGrades()
+
+    suspend fun insertAttendance(record: com.example.data.model.AttendanceRecord): Long =
+        attendanceDao.insertAttendance(record)
+
+    suspend fun deleteAttendance(id: Long) = attendanceDao.deleteById(id)
+
+    suspend fun saveGrade(grade: com.example.data.model.GradeRecord): Long =
+        gradeDao.insertOrUpdateGrade(grade)
+
+    suspend fun deleteGrade(grade: com.example.data.model.GradeRecord) =
+        gradeDao.deleteGrade(grade)
 
     fun getSchedulesByDay(day: Int): Flow<List<ScheduleItem>> {
         return scheduleDao.getSchedulesByDay(day)

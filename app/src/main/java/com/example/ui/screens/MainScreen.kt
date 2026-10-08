@@ -51,6 +51,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.ui.dialogs.AddEditScheduleDialog
 import com.example.ui.dialogs.ApiKeyDialog
+import com.example.ui.dialogs.ExportWallpaperDialog
+import com.example.ui.dialogs.GradeAttendanceDialog
+import com.example.ui.dialogs.QrShareImportDialog
 import com.example.ui.viewmodel.TimetableViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -210,6 +213,32 @@ fun MainScreen(viewModel: TimetableViewModel) {
             initialKey = state.customApiKeyOnly,
             onDismiss = { viewModel.setShowApiKeyDialog(false) },
             onSave = { key -> viewModel.setCustomApiKey(key) }
+        )
+    }
+
+    // Feature 3: Export Wallpaper Dialog
+    if (state.showExportWallpaperDialog) {
+        ExportWallpaperDialog(
+            schedules = state.schedules,
+            onDismiss = { viewModel.setShowExportWallpaperDialog(false) }
+        )
+    }
+
+    // Feature 6: QR Code Share & Import Dialog
+    if (state.showQrShareDialog) {
+        QrShareImportDialog(
+            state = state,
+            viewModel = viewModel,
+            onDismiss = { viewModel.setShowQrShareDialog(false) }
+        )
+    }
+
+    // Feature 5: Grade & Attendance Dialog
+    if (state.showGradeAttendanceDialog) {
+        GradeAttendanceDialog(
+            state = state,
+            viewModel = viewModel,
+            onDismiss = { viewModel.setShowGradeAttendanceDialog(false) }
         )
     }
 }
