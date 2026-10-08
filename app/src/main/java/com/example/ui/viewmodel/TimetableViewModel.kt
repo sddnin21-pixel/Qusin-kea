@@ -4,12 +4,17 @@ import android.app.Application
 import android.graphics.Bitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import android.app.Activity
+import android.content.Context
 import com.example.data.model.AttendanceRecord
 import com.example.data.model.AttendanceStatus
 import com.example.data.model.GradeRecord
 import com.example.data.model.ScheduleItem
+import com.example.data.model.UserProfile
 import com.example.data.repository.ScheduleRepository
+import com.example.data.service.AuthManager
 import com.example.data.service.GeminiScheduleParser
+import com.example.util.GoogleCalendarHelper
 import com.example.util.NotificationHelper
 import com.example.util.PreferencesManager
 import com.example.util.QrCodeHelper
@@ -53,7 +58,11 @@ data class TimetableUiState(
     val showQrShareDialog: Boolean = false,
     val qrBitmap: Bitmap? = null,
     val qrDecodedPreviewItems: List<ScheduleItem>? = null,
-    val qrError: String? = null
+    val qrError: String? = null,
+    // User Authentication & User-Specific Google Calendar Syncing
+    val currentUser: UserProfile? = null,
+    val showLoginDialog: Boolean = false,
+    val isSigningIn: Boolean = false
 )
 
 class TimetableViewModel(application: Application) : AndroidViewModel(application) {
@@ -61,6 +70,7 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
     private val prefs = PreferencesManager(application)
     private val geminiParser = GeminiScheduleParser()
     private val notificationHelper = NotificationHelper(application)
+    private val authManager = AuthManager(application)
 
     private val _uiState = MutableStateFlow(
         TimetableUiState(
@@ -68,7 +78,8 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             customApiKeyOnly = prefs.getCustomApiKeyOnly(),
             defaultReminderMinutes = prefs.getDefaultReminderMinutes(),
             isNotificationsEnabled = prefs.isNotificationsEnabled(),
-            selectedModel = prefs.getSelectedModel()
+            selectedModel = prefs.getSelectedModel(),
+            currentUser = authManager.currentUser.value
         )
     )
     val uiState: StateFlow<TimetableUiState> = _uiState.asStateFlow()
@@ -91,6 +102,13 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
                 // Refresh widgets whenever data changes
                 TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
                 TimetableAgendaWidgetProvider.updateAllWidgets(getApplication())
+            }
+        }
+
+        // Collect current authenticated user
+        viewModelScope.launch {
+            authManager.currentUser.collect { user ->
+                _uiState.update { it.copy(currentUser = user) }
             }
         }
 
@@ -617,5 +635,52 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             TimetableCountdownWidgetProvider.updateAllWidgets(getApplication())
             TimetableAgendaWidgetProvider.updateAllWidgets(getApplication())
         }
+    }
+
+    // --- AUTHENTICATION & USER-SPECIFIC GOOGLE CALENDAR SYNC ---
+    fun setShowLoginDialog(show: Boolean) {
+        _uiState.update { it.copy(showLoginDialog = show) }
+    }
+
+    fun signInWithGoogle(activity: Activity) {
+        _uiState.update { it.copy(isSigningIn = true) }
+        viewModelScope.launch {
+            val result = authManager.signInWithGoogle(activity)
+            _uiState.update { it.copy(isSigningIn = false) }
+            result.onSuccess { user ->
+                showSnackbar("Xin chào, ${user.displayName}! Đã liên kết tài khoản Google.")
+                _uiState.update { it.copy(showLoginDialog = false) }
+            }.onFailure { error ->
+                showSnackbar(error.message ?: "Đăng nhập Google không thành công.")
+            }
+        }
+    }
+
+    fun signInWithStudentEmail(email: String, displayName: String) {
+        val result = authManager.signInWithStudentEmail(email, displayName)
+        result.onSuccess { user ->
+            showSnackbar("Đăng nhập thành công với email: ${user.email}")
+            _uiState.update { it.copy(showLoginDialog = false) }
+        }.onFailure { error ->
+            showSnackbar(error.message ?: "Đăng nhập thất bại.")
+        }
+    }
+
+    fun signOut() {
+        authManager.signOut()
+        showSnackbar("Đã đăng xuất tài khoản.")
+    }
+
+    fun syncGoogleCalendarForCurrentUser(context: Context): Pair<Int, String> {
+        val currentUserEmail = _uiState.value.currentUser?.email
+        val result = GoogleCalendarHelper.syncDirectToGoogleCalendar(
+            context = context,
+            items = _uiState.value.schedules,
+            targetUserEmail = currentUserEmail
+        )
+        if (result.first > 0) {
+            authManager.updateLastSyncTime()
+        }
+        return result
     }
 }

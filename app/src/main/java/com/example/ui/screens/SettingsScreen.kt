@@ -28,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
@@ -95,7 +96,7 @@ fun SettingsScreen(
     ) { permissions ->
         val granted = permissions[Manifest.permission.WRITE_CALENDAR] == true
         if (granted) {
-            val (count, message) = GoogleCalendarHelper.syncDirectToGoogleCalendar(context, state.schedules)
+            val (count, message) = viewModel.syncGoogleCalendarForCurrentUser(context)
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         } else {
             Toast.makeText(context, "Cần cấp quyền Lịch để đồng bộ trực tiếp.", Toast.LENGTH_SHORT).show()
@@ -137,6 +138,83 @@ fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Account & User-Specific Google Calendar Sync Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (state.currentUser != null)
+                    MaterialTheme.colorScheme.primaryContainer
+                else
+                    MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            tint = if (state.currentUser != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(26.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (state.currentUser != null) "Tài Khoản Google Đã Liên Kết" else "Tài Khoản & Google Calendar",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (state.currentUser != null) {
+                    Text(
+                        text = "Đang đăng nhập: ${state.currentUser.displayName} (${state.currentUser.email})",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Lịch học sẽ được đồng bộ chính xác vào tài khoản Google cá nhân này.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { viewModel.setShowLoginDialog(true) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Quản Lý / Đổi Tài Khoản")
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Đăng nhập bằng tài khoản Google để đồng bộ thời khóa biểu trực tiếp vào lịch của bạn và nhận chuông báo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { viewModel.setShowLoginDialog(true) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Đăng Nhập Google Ngay", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
         // Section 1: Gemini AI Key
         Card(
             modifier = Modifier.fillMaxWidth(),

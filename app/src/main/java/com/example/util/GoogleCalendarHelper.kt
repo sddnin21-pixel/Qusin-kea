@@ -67,12 +67,17 @@ object GoogleCalendarHelper {
     }
 
     /**
-     * Direct sync into Android/Google Calendar Provider using READ_CALENDAR and WRITE_CALENDAR permissions
+     * Direct sync into Android/Google Calendar Provider using READ_CALENDAR and WRITE_CALENDAR permissions.
+     * Supports user-specific calendar matching if userEmail is provided.
      */
-    fun syncDirectToGoogleCalendar(context: Context, items: List<ScheduleItem>): Pair<Int, String> {
+    fun syncDirectToGoogleCalendar(
+        context: Context,
+        items: List<ScheduleItem>,
+        targetUserEmail: String? = null
+    ): Pair<Int, String> {
         val resolver = context.contentResolver
 
-        // Find best calendar (prefer Google account calendar)
+        // Find best calendar (prefer target user's Google account calendar)
         val projection = arrayOf(
             CalendarContract.Calendars._ID,
             CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
@@ -82,6 +87,7 @@ object GoogleCalendarHelper {
         )
 
         var targetCalendarId: Long = -1
+        var matchedAccountName = ""
         try {
             val cursor = resolver.query(
                 CalendarContract.Calendars.CONTENT_URI,
@@ -91,18 +97,25 @@ object GoogleCalendarHelper {
                 null
             )
             cursor?.use {
-                var foundGoogle = false
                 while (it.moveToNext()) {
                     val id = it.getLong(it.getColumnIndexOrThrow(CalendarContract.Calendars._ID))
+                    val accountName = it.getString(it.getColumnIndexOrThrow(CalendarContract.Calendars.ACCOUNT_NAME)) ?: ""
                     val accountType = it.getString(it.getColumnIndexOrThrow(CalendarContract.Calendars.ACCOUNT_TYPE)) ?: ""
 
-                    if (accountType.contains("google", ignoreCase = true)) {
+                    // Exact user match if specified
+                    if (!targetUserEmail.isNullOrBlank() && accountName.equals(targetUserEmail.trim(), ignoreCase = true)) {
                         targetCalendarId = id
-                        foundGoogle = true
+                        matchedAccountName = accountName
                         break
                     }
-                    if (targetCalendarId == -1L) {
+
+                    // Otherwise first Google account
+                    if (accountType.contains("google", ignoreCase = true) && targetCalendarId == -1L) {
                         targetCalendarId = id
+                        matchedAccountName = accountName
+                    } else if (targetCalendarId == -1L) {
+                        targetCalendarId = id
+                        matchedAccountName = accountName
                     }
                 }
             }
@@ -168,7 +181,8 @@ object GoogleCalendarHelper {
             }
         }
 
-        return Pair(syncedCount, "Đã đồng bộ thành công $syncedCount môn học vào Lịch Google!")
+        val targetMsg = if (matchedAccountName.isNotBlank()) "vào Lịch Google ($matchedAccountName)" else "vào Lịch Google"
+        return Pair(syncedCount, "Đã đồng bộ thành công $syncedCount môn học $targetMsg!")
     }
 
     /**

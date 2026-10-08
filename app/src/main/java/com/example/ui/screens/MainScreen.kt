@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -53,6 +54,7 @@ import com.example.ui.dialogs.AddEditScheduleDialog
 import com.example.ui.dialogs.ApiKeyDialog
 import com.example.ui.dialogs.ExportWallpaperDialog
 import com.example.ui.dialogs.GradeAttendanceDialog
+import com.example.ui.dialogs.LoginDialog
 import com.example.ui.dialogs.QrShareImportDialog
 import com.example.ui.viewmodel.TimetableViewModel
 
@@ -96,6 +98,17 @@ fun MainScreen(viewModel: TimetableViewModel) {
                     }
                 },
                 actions = {
+                    // Google Account & Calendar Sync button
+                    IconButton(
+                        onClick = { viewModel.setShowLoginDialog(true) },
+                        modifier = Modifier.testTag("top_bar_account_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = "Tài khoản & Đồng bộ Google Calendar",
+                            tint = if (state.currentUser != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     IconButton(
                         onClick = { viewModel.setShowApiKeyDialog(true) },
                         modifier = Modifier.testTag("top_bar_key_btn")
@@ -239,6 +252,15 @@ fun MainScreen(viewModel: TimetableViewModel) {
             state = state,
             viewModel = viewModel,
             onDismiss = { viewModel.setShowGradeAttendanceDialog(false) }
+        )
+    }
+
+    // Google Account & User-Specific Calendar Sync Dialog
+    if (state.showLoginDialog) {
+        LoginDialog(
+            state = state,
+            viewModel = viewModel,
+            onDismiss = { viewModel.setShowLoginDialog(false) }
         )
     }
 }

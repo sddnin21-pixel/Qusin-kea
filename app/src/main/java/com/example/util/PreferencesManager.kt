@@ -70,4 +70,48 @@ class PreferencesManager(context: Context) {
     fun setFirstLaunchCompleted() {
         prefs.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply()
     }
+
+    fun saveUserProfile(profile: com.example.data.model.UserProfile) {
+        prefs.edit()
+            .putString("user_uid", profile.uid)
+            .putString("user_name", profile.displayName)
+            .putString("user_email", profile.email)
+            .putString("user_photo", profile.photoUrl ?: "")
+            .putBoolean("user_is_google", profile.isGoogleLinked)
+            .putLong("user_last_sync", profile.lastSyncTime ?: 0L)
+            .apply()
+    }
+
+    fun getUserProfile(): com.example.data.model.UserProfile? {
+        val email = prefs.getString("user_email", "") ?: ""
+        if (email.isBlank()) return null
+        val uid = prefs.getString("user_uid", "user_${System.currentTimeMillis()}") ?: ""
+        val name = prefs.getString("user_name", "Sinh viên") ?: "Sinh viên"
+        val photo = prefs.getString("user_photo", "") ?: ""
+        val isGoogle = prefs.getBoolean("user_is_google", true)
+        val lastSync = prefs.getLong("user_last_sync", 0L)
+        return com.example.data.model.UserProfile(
+            uid = uid,
+            displayName = name,
+            email = email,
+            photoUrl = photo.ifBlank { null },
+            isGoogleLinked = isGoogle,
+            lastSyncTime = if (lastSync > 0) lastSync else null
+        )
+    }
+
+    fun updateLastCalendarSyncTime(time: Long) {
+        prefs.edit().putLong("user_last_sync", time).apply()
+    }
+
+    fun clearUserProfile() {
+        prefs.edit()
+            .remove("user_uid")
+            .remove("user_name")
+            .remove("user_email")
+            .remove("user_photo")
+            .remove("user_is_google")
+            .remove("user_last_sync")
+            .apply()
+    }
 }

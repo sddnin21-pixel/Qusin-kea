@@ -113,7 +113,7 @@ class TimetableAgendaWidgetProvider : AppWidgetProvider() {
         }
 
         val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
-        val dateFormat = SimpleDateFormat("EEEE, dd/MM", Locale("vi", "VN"))
+        val dateFormat = SimpleDateFormat("EEEE, dd/MM", Locale.forLanguageTag("vi-VN"))
         val dateString = dateFormat.format(Date()).replaceFirstChar { it.uppercase() }
 
         // Môn học hôm nay
