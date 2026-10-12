@@ -15,6 +15,8 @@ import com.example.data.repository.ScheduleRepository
 import com.example.data.service.AuthManager
 import com.example.data.service.GeminiScheduleParser
 import com.example.util.GoogleCalendarHelper
+import com.example.util.MotivationQuote
+import com.example.util.MotivationQuotesHelper
 import com.example.util.NotificationHelper
 import com.example.util.PreferencesManager
 import com.example.util.QrCodeHelper
@@ -62,7 +64,11 @@ data class TimetableUiState(
     // User Authentication & User-Specific Google Calendar Syncing
     val currentUser: UserProfile? = null,
     val showLoginDialog: Boolean = false,
-    val isSigningIn: Boolean = false
+    val isSigningIn: Boolean = false,
+    // Daily Motivation Quotes from 607 Quotes File for THPTQG
+    val currentQuote: MotivationQuote? = null,
+    val showMotivationQuotesDialog: Boolean = false,
+    val selectedWallpaperQuote: MotivationQuote? = null
 )
 
 class TimetableViewModel(application: Application) : AndroidViewModel(application) {
@@ -79,7 +85,8 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             defaultReminderMinutes = prefs.getDefaultReminderMinutes(),
             isNotificationsEnabled = prefs.isNotificationsEnabled(),
             selectedModel = prefs.getSelectedModel(),
-            currentUser = authManager.currentUser.value
+            currentUser = authManager.currentUser.value,
+            currentQuote = MotivationQuotesHelper.getTodayQuote(application)
         )
     )
     val uiState: StateFlow<TimetableUiState> = _uiState.asStateFlow()
@@ -682,5 +689,23 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             authManager.updateLastSyncTime()
         }
         return result
+    }
+
+    // --- FEATURE 607 MOTIVATION QUOTES & THPTQG ---
+    fun setShowMotivationQuotesDialog(show: Boolean) {
+        _uiState.update { it.copy(showMotivationQuotesDialog = show) }
+    }
+
+    fun nextRandomQuote() {
+        val next = MotivationQuotesHelper.getRandomQuote(getApplication())
+        _uiState.update { it.copy(currentQuote = next) }
+    }
+
+    fun selectQuote(quote: MotivationQuote) {
+        _uiState.update { it.copy(currentQuote = quote, selectedWallpaperQuote = quote) }
+    }
+
+    fun setSelectedWallpaperQuote(quote: MotivationQuote?) {
+        _uiState.update { it.copy(selectedWallpaperQuote = quote) }
     }
 }

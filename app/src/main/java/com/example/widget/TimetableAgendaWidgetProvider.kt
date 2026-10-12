@@ -201,6 +201,10 @@ class TimetableAgendaWidgetProvider : AppWidgetProvider() {
                 bindSlot(views, 3, displayClasses.getOrNull(2), nowMinutes, isShowingTomorrow)
             }
 
+            // Set Daily Motivation Quote (from 607 quotes)
+            val todayQuote = com.example.util.MotivationQuotesHelper.getTodayQuote(context)
+            views.setTextViewText(R.id.widget_agenda_quote, "✨ ${todayQuote.displayDayTitle}: ${todayQuote.content}")
+
             appWidgetManager.updateAppWidget(widgetId, views)
         }
     }

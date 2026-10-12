@@ -15,6 +15,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
 import kotlin.math.max
+import kotlin.math.min
 
 object TimetableWallpaperGenerator {
 
@@ -72,15 +73,28 @@ object TimetableWallpaperGenerator {
         WEEKDAYS("Chỉ Ngày Thường (T2 - T6)")
     }
 
-    enum class WallpaperLayout(val label: String) {
-        STANDARD_9_16("Màn Khóa 9:16 Tự Động Co Giãn"),
-        TWO_COLUMNS("Chia 2 Cột Thông Minh (Nhiều Tiết)"),
-        LONG_POSTER("Ảnh Cuộn Dài (Đầy Đủ 100% Tiết)")
+    enum class WallpaperLayout(val label: String, val description: String) {
+        STANDARD_9_16(
+            "Màn Khóa 9:16 Dọc Co Giãn",
+            "Bố cục danh sách tuần tiêu chuẩn"
+        ),
+        TWO_COLUMNS(
+            "Chia 2 Cột Thông Minh",
+            "Tự động chia 2 cột, thích hợp 20 - 50 tiết"
+        ),
+        GRID_MATRIX(
+            "Bảng Ma Trận Tuần (Chuẩn 116 Tiết)",
+            "Lưới 7 ngày x 12 ca học kinh điển, vừa khít 100% không cắt xén!"
+        ),
+        LONG_POSTER(
+            "Ảnh Cuộn Dài 100%",
+            "Mở rộng chiều dọc không giới hạn, chữ to rõ nét"
+        )
     }
 
     /**
      * Thuật toán Gộp Tiết Thông Minh:
-     * Tự động gộp các tiết liên tiếp cùng môn, cùng phòng, cùng giảng viên trong ngày
+     * Tự động gộp các tiết liên tiếp cùng môn, cùng phòng trong ngày
      * (Ví dụ 4 tiết Toán 07:00-07:45, 07:45-08:30, 08:35-09:20, 09:25-10:10 -> 1 khối 07:00 - 10:10)
      */
     fun mergeConsecutivePeriods(items: List<ScheduleItem>): List<ScheduleItem> {
@@ -118,7 +132,7 @@ object TimetableWallpaperGenerator {
         }
     }
 
-    private fun parseTimeToMinutes(timeStr: String): Int {
+    fun parseTimeToMinutes(timeStr: String): Int {
         val parts = timeStr.trim().split(":")
         val h = parts.getOrNull(0)?.toIntOrNull() ?: 0
         val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
@@ -126,7 +140,7 @@ object TimetableWallpaperGenerator {
     }
 
     /**
-     * Tạo hình nền thích ứng với số lượng tiết học lớn (116 tiết)
+     * Tạo hình nền 9:16 thích ứng ngay cả khi lịch học lên đến 116 tiết/tuần
      */
     fun generateWallpaper(
         schedules: List<ScheduleItem>,
@@ -135,7 +149,9 @@ object TimetableWallpaperGenerator {
         customSubtitle: String = "Lịch Học Cá Nhân",
         scope: WallpaperScope = WallpaperScope.ALL_WEEK,
         layout: WallpaperLayout = WallpaperLayout.STANDARD_9_16,
-        autoMergeConsecutive: Boolean = true
+        autoMergeConsecutive: Boolean = true,
+        customMotivationalQuote: String? = null,
+        context: Context? = null
     ): Bitmap {
         // 1. Lọc theo Scope
         val targetDays = when (scope) {
@@ -150,22 +166,32 @@ object TimetableWallpaperGenerator {
         // 2. Nhóm theo ngày và tùy chọn gộp tiết
         val dayGroups = targetDays.map { day ->
             val dayItems = filteredSchedules.filter { it.dayOfWeek == day }
-            val processedItems = if (autoMergeConsecutive) mergeConsecutivePeriods(dayItems) else dayItems.sortedBy { it.startTime }
+            val processedItems = if (autoMergeConsecutive) {
+                mergeConsecutivePeriods(dayItems)
+            } else {
+                dayItems.sortedBy { it.startTime }
+            }
             day to processedItems
         }
 
         val totalProcessedItems = dayGroups.sumOf { it.second.size }
 
-        // Quyết định bố cục tự động nếu quá nhiều môn (> 20 môn/tuần)
-        val effectiveLayout = if (layout == WallpaperLayout.STANDARD_9_16 && totalProcessedItems > 18) {
-            WallpaperLayout.TWO_COLUMNS
-        } else {
-            layout
+        // Quyết định bố cục tối ưu:
+        // Nếu người dùng chọn STANDARD_9_16 nhưng có quá nhiều tiết (> 25 ca), tự động chuyển sang TWO_COLUMNS
+        // Nếu số tiết cực kỳ lớn (> 55 tiết) và không chọn LONG_POSTER hay GRID_MATRIX, ưu tiên GRID_MATRIX
+        val effectiveLayout = when {
+            layout == WallpaperLayout.GRID_MATRIX -> WallpaperLayout.GRID_MATRIX
+            layout == WallpaperLayout.LONG_POSTER -> WallpaperLayout.LONG_POSTER
+            layout == WallpaperLayout.STANDARD_9_16 && totalProcessedItems > 50 -> WallpaperLayout.GRID_MATRIX
+            layout == WallpaperLayout.STANDARD_9_16 && totalProcessedItems > 16 -> WallpaperLayout.TWO_COLUMNS
+            else -> layout
         }
 
         val width = 1080
         val height = when (effectiveLayout) {
-            WallpaperLayout.LONG_POSTER -> max(1920, 420 + (totalProcessedItems * 58) + (targetDays.size * 65))
+            WallpaperLayout.LONG_POSTER -> {
+                max(1920, 440 + (totalProcessedItems * 64) + (targetDays.size * 68))
+            }
             else -> 1920
         }
 
@@ -182,7 +208,7 @@ object TimetableWallpaperGenerator {
         bgPaint.shader = shader
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
-        // Họa tiết phát sáng nền
+        // Họa tiết phát sáng nền viền
         val glowPaint = Paint().apply {
             isAntiAlias = true
             color = theme.accentColor
@@ -199,39 +225,42 @@ object TimetableWallpaperGenerator {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText("✦ SMART SCHEDULE • ${scope.label.uppercase(Locale.getDefault())} ✦", width / 2f, 100f, headerTagPaint)
+        canvas.drawText("✦ THỜI KHÓA BIỂU THÔNG MINH • ${scope.label.uppercase(Locale.getDefault())} ✦", width / 2f, 95f, headerTagPaint)
 
         val titlePaint = Paint().apply {
             isAntiAlias = true
             color = theme.textPrimary
-            textSize = 50f
+            textSize = 48f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText(customTitle, width / 2f, 165f, titlePaint)
+        canvas.drawText(customTitle, width / 2f, 155f, titlePaint)
 
         val subPaint = Paint().apply {
             isAntiAlias = true
             color = theme.textSecondary
-            textSize = 28f
+            textSize = 26f
             textAlign = Paint.Align.CENTER
         }
         val countInfo = if (schedules.size != totalProcessedItems) {
-            "$customSubtitle • ${schedules.size} tiết (Gộp gọn ${totalProcessedItems} ca học)"
+            "$customSubtitle • ${schedules.size} tiết (Tối ưu gộp ${totalProcessedItems} ca học)"
         } else {
-            "$customSubtitle • ${totalProcessedItems} môn học"
+            "$customSubtitle • ${totalProcessedItems} tiết học"
         }
-        canvas.drawText(countInfo, width / 2f, 215f, subPaint)
+        canvas.drawText(countInfo, width / 2f, 202f, subPaint)
 
         val dividerPaint = Paint().apply {
             color = theme.accentColor
-            alpha = 80
-            strokeWidth = 2.5f
+            alpha = 70
+            strokeWidth = 2f
         }
-        canvas.drawLine(width * 0.15f, 245f, width * 0.85f, 245f, dividerPaint)
+        canvas.drawLine(width * 0.15f, 228f, width * 0.85f, 228f, dividerPaint)
 
         // 5. Vẽ danh sách theo Bố cục
         when (effectiveLayout) {
+            WallpaperLayout.GRID_MATRIX -> {
+                drawGridMatrixLayout(canvas, dayGroups, targetDays, width, height, theme)
+            }
             WallpaperLayout.TWO_COLUMNS -> {
                 drawTwoColumnsLayout(canvas, dayGroups, width, height, theme)
             }
@@ -240,85 +269,212 @@ object TimetableWallpaperGenerator {
             }
         }
 
-        // 6. Footer
-        val footerPaint = Paint().apply {
-            isAntiAlias = true
-            color = theme.textSecondary
-            textSize = 24f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
-            textAlign = Paint.Align.CENTER
+        // 6. Footer: Hiển thị câu động lực học tập & THPTQG từ file 607 câu
+        val effectiveQuote = when {
+            !customMotivationalQuote.isNullOrBlank() -> customMotivationalQuote.trim()
+            context != null -> {
+                val q = MotivationQuotesHelper.getTodayQuote(context)
+                "“${q.content}” — (Ngày ${String.format("%03d", q.dayNumber)}/607 • Chinh phục THPTQG)"
+            }
+            else -> "“Kỷ luật là cầu nối giữa mục tiêu và thành tựu.” — Chinh phục THPTQG ✨"
         }
-        canvas.drawText("✨ Kỷ luật là cây cầu nối giữa mục tiêu và thành tựu ✨", width / 2f, height - 40f, footerPaint)
+        drawFooterQuote(canvas, effectiveQuote, width, height, theme)
 
         return bitmap
     }
 
     /**
-     * Bố cục Danh Sách Dọc (Standard List)
+     * Bố cục Ma Trận Tuần (Grid Matrix 7 ngày x các ca học)
+     * Giải pháp hoàn hảo khi có tới 116 tiết:
+     * Toàn bộ 116 tiết được đưa vào bảng lưới tuần chuẩn mực như TKB học sinh,
+     * không bị tràn ra ngoài, không bị bỏ sót bất kỳ tiết nào trên màn hình khóa 9:16.
      */
-    private fun drawStandardListLayout(
+    private fun drawGridMatrixLayout(
         canvas: Canvas,
         dayGroups: List<Pair<Int, List<ScheduleItem>>>,
+        targetDays: List<Int>,
         width: Int,
         height: Int,
         theme: WallpaperTheme
     ) {
-        val totalItems = dayGroups.sumOf { it.second.size }
-        val itemHeight = if (totalItems > 15) 42f else 52f
-        val itemTextSize = if (totalItems > 15) 24f else 28f
-        val itemTimeSize = if (totalItems > 15) 20f else 24f
+        val startY = 245f
+        val bottomMargin = 95f
+        val availableH = height - startY - bottomMargin
 
-        val cardMarginX = 50f
-        val cardWidth = width - (cardMarginX * 2)
-        var currentY = 275f
+        val leftMargin = 30f
+        val rightMargin = 30f
+        val timeColWidth = 80f
+        val availableW = width - leftMargin - rightMargin - timeColWidth
+        val dayColWidth = availableW / targetDays.size.toFloat()
 
-        val cardPaint = Paint().apply { isAntiAlias = true; color = theme.cardBg; alpha = 220 }
-        val cardBorderPaint = Paint().apply { isAntiAlias = true; style = Paint.Style.STROKE; strokeWidth = 1.5f; color = theme.accentColor; alpha = 60 }
-        val dayHeaderPaint = Paint().apply { isAntiAlias = true; color = theme.accentColor; textSize = 28f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
-        val itemTextPaint = Paint().apply { isAntiAlias = true; color = theme.textPrimary; textSize = itemTextSize; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
-        val itemTimePaint = Paint().apply { isAntiAlias = true; color = theme.textSecondary; textSize = itemTimeSize }
-        val pillPaint = Paint().apply { isAntiAlias = true }
+        // Các ca học đại diện từ 1 đến 12 (Sáng: 1-5, Chiều: 6-10, Tối: 11-12)
+        val periodSlots = listOf(
+            "T1" to "07:00",
+            "T2" to "07:50",
+            "T3" to "08:45",
+            "T4" to "09:35",
+            "T5" to "10:25",
+            "T6" to "13:00",
+            "T7" to "13:50",
+            "T8" to "14:45",
+            "T9" to "15:35",
+            "T10" to "16:25",
+            "T11" to "17:30",
+            "T12" to "18:40"
+        )
+        val headerRowHeight = 44f
+        val rowHeight = (availableH - headerRowHeight) / periodSlots.size.toFloat()
 
-        for ((day, items) in dayGroups) {
-            if (currentY > height - 120f) break
+        val gridBorderPaint = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.STROKE
+            strokeWidth = 1f
+            color = theme.accentColor
+            alpha = 50
+        }
+        val headerBgPaint = Paint().apply {
+            isAntiAlias = true
+            color = theme.cardBg
+            alpha = 230
+        }
+        val dayHeaderPaint = Paint().apply {
+            isAntiAlias = true
+            color = theme.accentColor
+            textSize = 21f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+        val timeTextPaint = Paint().apply {
+            isAntiAlias = true
+            color = theme.textSecondary
+            textSize = 17f
+            textAlign = Paint.Align.CENTER
+        }
+        val cellBgPaint = Paint().apply { isAntiAlias = true }
+        val cellTextPaint = Paint().apply {
+            isAntiAlias = true
+            color = Color.WHITE
+            textSize = 16f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+        val cellRoomPaint = Paint().apply {
+            isAntiAlias = true
+            color = Color.WHITE
+            alpha = 200
+            textSize = 13f
+            textAlign = Paint.Align.CENTER
+        }
 
-            val dayName = DayOfWeekHelper.getDayNameVi(day).uppercase(Locale.getDefault())
-            val cardHeight = if (items.isEmpty()) 54f else (48f + items.size * itemHeight)
+        // 1. Vẽ Header bảng (Cột Giờ + Các Ngày)
+        val headerRect = RectF(leftMargin, startY, width - rightMargin, startY + headerRowHeight)
+        canvas.drawRoundRect(headerRect, 10f, 10f, headerBgPaint)
+        canvas.drawRoundRect(headerRect, 10f, 10f, gridBorderPaint)
 
-            val cardRect = RectF(cardMarginX, currentY, cardMarginX + cardWidth, currentY + cardHeight)
-            canvas.drawRoundRect(cardRect, 16f, 16f, cardPaint)
-            canvas.drawRoundRect(cardRect, 16f, 16f, cardBorderPaint)
+        canvas.drawText("Tiết", leftMargin + timeColWidth / 2f, startY + 28f, dayHeaderPaint)
 
-            canvas.drawText(dayName, cardMarginX + 24f, currentY + 34f, dayHeaderPaint)
+        targetDays.forEachIndexed { index, dayNum ->
+            val colX = leftMargin + timeColWidth + (index * dayColWidth)
+            val dayName = DayOfWeekHelper.getShortDayNameVi(dayNum)
+            canvas.drawText(dayName, colX + dayColWidth / 2f, startY + 28f, dayHeaderPaint)
+            // Đường phân cách dọc
+            canvas.drawLine(colX, startY, colX, startY + availableH, gridBorderPaint)
+        }
 
-            if (items.isEmpty()) {
-                val emptyPaint = Paint().apply { isAntiAlias = true; color = theme.textSecondary; textSize = 22f; alpha = 140 }
-                canvas.drawText("Nghỉ học / Tự do", cardMarginX + 240f, currentY + 34f, emptyPaint)
-            } else {
-                var itemY = currentY + 68f
-                for (item in items) {
-                    try { pillPaint.color = Color.parseColor(item.colorHex) } catch (_: Exception) { pillPaint.color = theme.accentColor }
-                    canvas.drawRoundRect(RectF(cardMarginX + 24f, itemY - 18f, cardMarginX + 32f, itemY + 10f), 4f, 4f, pillPaint)
+        // 2. Vẽ Hàng Ca Học
+        val contentStartY = startY + headerRowHeight
+        periodSlots.forEachIndexed { pIdx, (periodName, approxTime) ->
+            val rowY = contentStartY + (pIdx * rowHeight)
 
-                    val timeStr = "${item.startTime} - ${item.endTime}"
-                    canvas.drawText(timeStr, cardMarginX + 44f, itemY, itemTimePaint)
-
-                    val roomStr = if (item.room.isNotBlank()) " [${item.room}]" else ""
-                    val titleText = "${item.title}$roomStr"
-                    val truncated = if (titleText.length > 28) titleText.take(27) + "…" else titleText
-                    canvas.drawText(truncated, cardMarginX + 270f, itemY, itemTextPaint)
-
-                    itemY += itemHeight
+            // Nền hàng chẵn/lẻ
+            if (pIdx % 2 == 1) {
+                val rowRect = RectF(leftMargin, rowY, width - rightMargin, rowY + rowHeight)
+                val stripePaint = Paint().apply {
+                    color = theme.cardBg
+                    alpha = 70
                 }
+                canvas.drawRect(rowRect, stripePaint)
             }
 
-            currentY += cardHeight + 12f
+            // Cột thời gian
+            canvas.drawText(periodName, leftMargin + timeColWidth / 2f, rowY + rowHeight * 0.45f, timeTextPaint)
+            canvas.drawText(approxTime, leftMargin + timeColWidth / 2f, rowY + rowHeight * 0.85f, timeTextPaint)
+
+            // Đường phân cách ngang
+            canvas.drawLine(leftMargin, rowY + rowHeight, width - rightMargin, rowY + rowHeight, gridBorderPaint)
+        }
+
+        // 3. Phân bổ các môn học vào ô tương ứng
+        val dayMap = dayGroups.toMap()
+        targetDays.forEachIndexed { colIdx, dayNum ->
+            val colX = leftMargin + timeColWidth + (colIdx * dayColWidth)
+            val items = dayMap[dayNum] ?: emptyList()
+
+            // Nếu ngày không có môn
+            if (items.isEmpty()) {
+                val freePaint = Paint().apply {
+                    isAntiAlias = true
+                    color = theme.textSecondary
+                    alpha = 80
+                    textSize = 18f
+                    textAlign = Paint.Align.CENTER
+                }
+                canvas.drawText("Nghỉ", colX + dayColWidth / 2f, contentStartY + availableH / 2f, freePaint)
+            } else {
+                for (item in items) {
+                    val startMin = parseTimeToMinutes(item.startTime)
+                    val endMin = parseTimeToMinutes(item.endTime)
+
+                    // Tính vị trí Y xấp xỉ trong ngày (07:00 -> 21:00 = 14 tiếng = 840 phút)
+                    val dayStartMin = 7 * 60 // 07:00
+                    val dayEndMin = 21 * 60  // 21:00
+                    val totalDayMin = (dayEndMin - dayStartMin).toFloat()
+
+                    val clampedStart = startMin.coerceIn(dayStartMin, dayEndMin)
+                    val clampedEnd = endMin.coerceIn(clampedStart + 35, dayEndMin)
+
+                    val topFraction = (clampedStart - dayStartMin) / totalDayMin
+                    val bottomFraction = (clampedEnd - dayStartMin) / totalDayMin
+
+                    val cellTop = contentStartY + (topFraction * (availableH - headerRowHeight)) + 2f
+                    val cellBottom = contentStartY + (bottomFraction * (availableH - headerRowHeight)) - 2f
+                    val cellHeight = max(24f, cellBottom - cellTop)
+
+                    val cellRect = RectF(colX + 3f, cellTop, colX + dayColWidth - 3f, cellTop + cellHeight)
+
+                    // Màu môn học
+                    try {
+                        cellBgPaint.color = Color.parseColor(item.colorHex)
+                    } catch (_: Exception) {
+                        cellBgPaint.color = theme.accentColor
+                    }
+                    cellBgPaint.alpha = 225
+                    canvas.drawRoundRect(cellRect, 6f, 6f, cellBgPaint)
+
+                    // Text môn học
+                    val maxLen = if (dayColWidth < 140f) 8 else 12
+                    val displayTitle = if (item.title.length > maxLen) {
+                        item.title.take(maxLen - 1) + "…"
+                    } else {
+                        item.title
+                    }
+                    val centerY = cellTop + (cellHeight / 2f)
+
+                    if (cellHeight >= 36f) {
+                        canvas.drawText(displayTitle, colX + dayColWidth / 2f, centerY - 2f, cellTextPaint)
+                        val roomStr = if (item.room.isNotBlank()) item.room else item.startTime
+                        canvas.drawText(roomStr, colX + dayColWidth / 2f, centerY + 14f, cellRoomPaint)
+                    } else {
+                        canvas.drawText(displayTitle, colX + dayColWidth / 2f, centerY + 5f, cellTextPaint)
+                    }
+                }
+            }
         }
     }
 
     /**
-     * Bố cục 2 Cột Song Song Thông Minh (Two Columns Layout)
-     * Thích hợp hoàn hảo cho lịch học dày đặc 50-116 tiết mà không làm vỡ tỉ lệ 9:16
+     * Bố cục 2 Cột Song Song Thông Minh (Adaptive Two Columns Layout)
+     * Tự động co dãn chiều cao theo ngân sách điểm ảnh, đảm bảo không bỏ sót bất kỳ tiết nào
      */
     private fun drawTwoColumnsLayout(
         canvas: Canvas,
@@ -335,54 +491,194 @@ object TimetableWallpaperGenerator {
         val colGap = 16f
         val colWidth = (width - (colMargin * 2) - colGap) / 2f
 
+        val startY = 248f
+        val bottomMargin = 95f
+        val availableH = height - startY - bottomMargin
+
+        // Tính ngân sách chiều cao động để không bao giờ bị cắt xén
+        val maxColItems = max(1, max(leftGroups.sumOf { it.second.size }, rightGroups.sumOf { it.second.size }))
+        val maxColDays = max(1, max(leftGroups.size, rightGroups.size))
+        val headerBudget = maxColDays * 36f
+        val itemBudget = availableH - headerBudget - (maxColDays * 10f)
+
+        val itemHeight = (itemBudget / maxColItems).coerceIn(20f, 44f)
+        val itemTextSize = (itemHeight * 0.52f).coerceIn(13f, 22f)
+        val itemTimeSize = (itemHeight * 0.40f).coerceIn(11f, 17f)
+
         val cardPaint = Paint().apply { isAntiAlias = true; color = theme.cardBg; alpha = 230 }
         val cardBorderPaint = Paint().apply { isAntiAlias = true; style = Paint.Style.STROKE; strokeWidth = 1.2f; color = theme.accentColor; alpha = 60 }
-        val dayHeaderPaint = Paint().apply { isAntiAlias = true; color = theme.accentColor; textSize = 24f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
-        val itemTextPaint = Paint().apply { isAntiAlias = true; color = theme.textPrimary; textSize = 22f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
-        val itemTimePaint = Paint().apply { isAntiAlias = true; color = theme.textSecondary; textSize = 18f }
+        val dayHeaderPaint = Paint().apply { isAntiAlias = true; color = theme.accentColor; textSize = 22f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+        val itemTextPaint = Paint().apply { isAntiAlias = true; color = theme.textPrimary; textSize = itemTextSize; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+        val itemTimePaint = Paint().apply { isAntiAlias = true; color = theme.textSecondary; textSize = itemTimeSize }
         val pillPaint = Paint().apply { isAntiAlias = true }
 
         fun renderColumn(groups: List<Pair<Int, List<ScheduleItem>>>, startX: Float) {
-            var currentY = 270f
+            var currentY = startY
             for ((day, items) in groups) {
-                if (currentY > height - 90f) break
-
                 val dayName = DayOfWeekHelper.getShortDayNameVi(day).uppercase(Locale.getDefault())
-                val cardHeight = if (items.isEmpty()) 46f else (42f + items.size * 42f)
+                val cardHeight = if (items.isEmpty()) 40f else (34f + items.size * itemHeight)
 
                 val cardRect = RectF(startX, currentY, startX + colWidth, currentY + cardHeight)
-                canvas.drawRoundRect(cardRect, 14f, 14f, cardPaint)
-                canvas.drawRoundRect(cardRect, 14f, 14f, cardBorderPaint)
+                canvas.drawRoundRect(cardRect, 12f, 12f, cardPaint)
+                canvas.drawRoundRect(cardRect, 12f, 12f, cardBorderPaint)
 
-                canvas.drawText(dayName, startX + 16f, currentY + 30f, dayHeaderPaint)
+                canvas.drawText(dayName, startX + 16f, currentY + 24f, dayHeaderPaint)
 
                 if (items.isEmpty()) {
-                    val emptyPaint = Paint().apply { isAntiAlias = true; color = theme.textSecondary; textSize = 19f; alpha = 140 }
-                    canvas.drawText("Nghỉ", startX + 120f, currentY + 30f, emptyPaint)
+                    val emptyPaint = Paint().apply { isAntiAlias = true; color = theme.textSecondary; textSize = 17f; alpha = 140 }
+                    canvas.drawText("Nghỉ học", startX + 110f, currentY + 24f, emptyPaint)
                 } else {
-                    var itemY = currentY + 60f
+                    var itemY = currentY + 34f + (itemHeight * 0.7f)
                     for (item in items) {
-                        try { pillPaint.color = Color.parseColor(item.colorHex) } catch (_: Exception) { pillPaint.color = theme.accentColor }
-                        canvas.drawRoundRect(RectF(startX + 16f, itemY - 14f, startX + 22f, itemY + 8f), 3f, 3f, pillPaint)
+                        try {
+                            pillPaint.color = Color.parseColor(item.colorHex)
+                        } catch (_: Exception) {
+                            pillPaint.color = theme.accentColor
+                        }
+                        val pillTop = itemY - (itemHeight * 0.5f)
+                        val pillBottom = itemY + (itemHeight * 0.15f)
+                        canvas.drawRoundRect(RectF(startX + 14f, pillTop, startX + 19f, pillBottom), 3f, 3f, pillPaint)
 
                         val timeStr = "${item.startTime}-${item.endTime}"
-                        canvas.drawText(timeStr, startX + 28f, itemY, itemTimePaint)
+                        canvas.drawText(timeStr, startX + 26f, itemY, itemTimePaint)
 
                         val roomStr = if (item.room.isNotBlank()) " [${item.room}]" else ""
                         val titleText = "${item.title}$roomStr"
-                        val truncated = if (titleText.length > 16) titleText.take(15) + "…" else titleText
-                        canvas.drawText(truncated, startX + 185f, itemY, itemTextPaint)
+                        val maxTitleLen = if (itemHeight < 28f) 14 else 18
+                        val truncated = if (titleText.length > maxTitleLen) titleText.take(maxTitleLen - 1) + "…" else titleText
+                        canvas.drawText(truncated, startX + 175f, itemY, itemTextPaint)
 
-                        itemY += 42f
+                        itemY += itemHeight
                     }
                 }
-                currentY += cardHeight + 10f
+                currentY += cardHeight + 8f
             }
         }
 
-        // Vẽ cột trái & cột phải
         renderColumn(leftGroups, colMargin)
         renderColumn(rightGroups, colMargin + colWidth + colGap)
+    }
+
+    /**
+     * Bố cục Danh Sách Dọc Co Giãn (Standard List Layout)
+     */
+    private fun drawStandardListLayout(
+        canvas: Canvas,
+        dayGroups: List<Pair<Int, List<ScheduleItem>>>,
+        width: Int,
+        height: Int,
+        theme: WallpaperTheme
+    ) {
+        val totalItems = dayGroups.sumOf { it.second.size }
+        val startY = 248f
+        val bottomMargin = 95f
+        val availableH = height - startY - bottomMargin
+
+        val dayCount = max(1, dayGroups.size)
+        val headerBudget = dayCount * 42f
+        val itemBudget = availableH - headerBudget - (dayCount * 12f)
+        val itemHeight = (itemBudget / max(1, totalItems)).coerceIn(24f, 52f)
+        val itemTextSize = (itemHeight * 0.52f).coerceIn(14f, 26f)
+        val itemTimeSize = (itemHeight * 0.42f).coerceIn(12f, 22f)
+
+        val cardMarginX = 50f
+        val cardWidth = width - (cardMarginX * 2)
+        var currentY = startY
+
+        val cardPaint = Paint().apply { isAntiAlias = true; color = theme.cardBg; alpha = 220 }
+        val cardBorderPaint = Paint().apply { isAntiAlias = true; style = Paint.Style.STROKE; strokeWidth = 1.5f; color = theme.accentColor; alpha = 60 }
+        val dayHeaderPaint = Paint().apply { isAntiAlias = true; color = theme.accentColor; textSize = 26f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+        val itemTextPaint = Paint().apply { isAntiAlias = true; color = theme.textPrimary; textSize = itemTextSize; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+        val itemTimePaint = Paint().apply { isAntiAlias = true; color = theme.textSecondary; textSize = itemTimeSize }
+        val pillPaint = Paint().apply { isAntiAlias = true }
+
+        for ((day, items) in dayGroups) {
+            val dayName = DayOfWeekHelper.getDayNameVi(day).uppercase(Locale.getDefault())
+            val cardHeight = if (items.isEmpty()) 48f else (42f + items.size * itemHeight)
+
+            val cardRect = RectF(cardMarginX, currentY, cardMarginX + cardWidth, currentY + cardHeight)
+            canvas.drawRoundRect(cardRect, 16f, 16f, cardPaint)
+            canvas.drawRoundRect(cardRect, 16f, 16f, cardBorderPaint)
+
+            canvas.drawText(dayName, cardMarginX + 24f, currentY + 30f, dayHeaderPaint)
+
+            if (items.isEmpty()) {
+                val emptyPaint = Paint().apply { isAntiAlias = true; color = theme.textSecondary; textSize = 20f; alpha = 140 }
+                canvas.drawText("Nghỉ học / Tự do", cardMarginX + 220f, currentY + 30f, emptyPaint)
+            } else {
+                var itemY = currentY + 36f + (itemHeight * 0.7f)
+                for (item in items) {
+                    try {
+                        pillPaint.color = Color.parseColor(item.colorHex)
+                    } catch (_: Exception) {
+                        pillPaint.color = theme.accentColor
+                    }
+                    val pillTop = itemY - (itemHeight * 0.5f)
+                    val pillBottom = itemY + (itemHeight * 0.15f)
+                    canvas.drawRoundRect(RectF(cardMarginX + 24f, pillTop, cardMarginX + 30f, pillBottom), 3f, 3f, pillPaint)
+
+                    val timeStr = "${item.startTime} - ${item.endTime}"
+                    canvas.drawText(timeStr, cardMarginX + 42f, itemY, itemTimePaint)
+
+                    val roomStr = if (item.room.isNotBlank()) " [${item.room}]" else ""
+                    val titleText = "${item.title}$roomStr"
+                    val maxLen = if (itemHeight < 32f) 22 else 30
+                    val truncated = if (titleText.length > maxLen) titleText.take(maxLen - 1) + "…" else titleText
+                    canvas.drawText(truncated, cardMarginX + 250f, itemY, itemTextPaint)
+
+                    itemY += itemHeight
+                }
+            }
+            currentY += cardHeight + 10f
+        }
+    }
+
+    /**
+     * Vẽ câu động lực chân trang (Footer Quote từ file 607 câu)
+     * Tự động xuống dòng 2 dòng nếu câu dài để chữ hiển thị trọn vẹn, thanh thoát.
+     */
+    private fun drawFooterQuote(
+        canvas: Canvas,
+        quote: String,
+        width: Int,
+        height: Int,
+        theme: WallpaperTheme
+    ) {
+        val footerPaint = Paint().apply {
+            isAntiAlias = true
+            color = theme.textSecondary
+            textSize = 21f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+            textAlign = Paint.Align.CENTER
+        }
+
+        val maxWidth = width * 0.88f
+        val lines = splitTextToLines(quote, footerPaint, maxWidth)
+
+        val startY = if (lines.size > 1) height - 55f else height - 38f
+        lines.take(2).forEachIndexed { index, line ->
+            canvas.drawText(line, width / 2f, startY + (index * 26f), footerPaint)
+        }
+    }
+
+    private fun splitTextToLines(text: String, paint: Paint, maxW: Float): List<String> {
+        if (paint.measureText(text) <= maxW) return listOf(text)
+
+        val words = text.split(" ")
+        val lines = mutableListOf<String>()
+        var current = StringBuilder()
+
+        for (w in words) {
+            val candidate = if (current.isEmpty()) w else "$current $w"
+            if (paint.measureText(candidate) <= maxW) {
+                current = StringBuilder(candidate)
+            } else {
+                if (current.isNotEmpty()) lines.add(current.toString())
+                current = StringBuilder(w)
+            }
+        }
+        if (current.isNotEmpty()) lines.add(current.toString())
+        return lines
     }
 
     /**

@@ -55,6 +55,7 @@ import com.example.ui.dialogs.ApiKeyDialog
 import com.example.ui.dialogs.ExportWallpaperDialog
 import com.example.ui.dialogs.GradeAttendanceDialog
 import com.example.ui.dialogs.LoginDialog
+import com.example.ui.dialogs.MotivationQuotesDialog
 import com.example.ui.dialogs.QrShareImportDialog
 import com.example.ui.viewmodel.TimetableViewModel
 
@@ -233,6 +234,7 @@ fun MainScreen(viewModel: TimetableViewModel) {
     if (state.showExportWallpaperDialog) {
         ExportWallpaperDialog(
             schedules = state.schedules,
+            initialQuote = state.selectedWallpaperQuote ?: state.currentQuote,
             onDismiss = { viewModel.setShowExportWallpaperDialog(false) }
         )
     }
@@ -261,6 +263,17 @@ fun MainScreen(viewModel: TimetableViewModel) {
             state = state,
             viewModel = viewModel,
             onDismiss = { viewModel.setShowLoginDialog(false) }
+        )
+    }
+
+    // Feature 607 Daily Motivation Quotes & THPTQG Dialog
+    if (state.showMotivationQuotesDialog) {
+        MotivationQuotesDialog(
+            onDismiss = { viewModel.setShowMotivationQuotesDialog(false) },
+            onSelectQuoteForWallpaper = { quote ->
+                viewModel.selectQuote(quote)
+                viewModel.setShowMotivationQuotesDialog(false)
+            }
         )
     }
 }

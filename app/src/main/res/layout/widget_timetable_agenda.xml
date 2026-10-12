@@ -236,4 +236,17 @@
                 android:textSize="10sp" />
         </LinearLayout>
     </LinearLayout>
+
+    <!-- Motivational Quote Footer (607 Quotes) -->
+    <TextView
+        android:id="@+id/widget_agenda_quote"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="✨ Kỷ luật là cây cầu nối giữa mục tiêu và thành tựu"
+        android:textColor="#F59E0B"
+        android:textSize="9sp"
+        android:textStyle="italic" />
 </LinearLayout>

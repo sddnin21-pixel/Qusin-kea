@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,8 +28,11 @@ import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.Grade
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
@@ -63,6 +68,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,6 +79,8 @@ import com.example.data.model.ScheduleItem
 import com.example.ui.viewmodel.TimetableUiState
 import com.example.ui.viewmodel.TimetableViewModel
 import com.example.util.GoogleCalendarHelper
+import com.example.util.MotivationQuote
+import com.example.util.MotivationQuotesHelper
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -152,6 +160,68 @@ fun TimetableScreen(
                     ),
                     modifier = Modifier.testTag("action_grade_attendance")
                 )
+            }
+            item {
+                SuggestionChip(
+                    onClick = { viewModel.setShowMotivationQuotesDialog(true) },
+                    icon = { Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFFD97706)) },
+                    label = { Text("607 Câu Động Lực 🎓", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold) },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = Color(0xFFD97706).copy(alpha = 0.15f)
+                    ),
+                    modifier = Modifier.testTag("action_motivation_quotes")
+                )
+            }
+        }
+
+        // Feature 607 Daily Quotes for Study & THPTQG Exam
+        state.currentQuote?.let { quote ->
+            DailyMotivationBanner(
+                quote = quote,
+                onNextQuote = { viewModel.nextRandomQuote() },
+                onOpenQuotesDialog = { viewModel.setShowMotivationQuotesDialog(true) }
+            )
+        }
+
+        // Notification for High Schedule Density (e.g. 116 periods)
+        if (state.schedules.size > 35) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "⚡ Đang có ${state.schedules.size} tiết trong tuần!",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        Text(
+                            text = "Đã hỗ trợ 'Bảng Ma Trận Tuần' & 'Gộp Tiết Tự Động' giúp xuất ảnh 9:16 vừa khít 100% không cắt xén.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            lineHeight = 15.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { viewModel.setShowExportWallpaperDialog(true) },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text("Ảnh 9:16", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 
@@ -787,3 +857,117 @@ fun EmptySchedulePlaceholder(
         }
     }
 }
+
+@Composable
+fun DailyMotivationBanner(
+    quote: MotivationQuote,
+    onNextQuote: () -> Unit,
+    onOpenQuotesDialog: () -> Unit
+) {
+    val context = LocalContext.current
+    val daysUntilExam = remember { MotivationQuotesHelper.getDaysUntilThptExam() }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clickable { onOpenQuotesDialog() }
+            .testTag("daily_motivation_banner"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFF59E0B).copy(alpha = 0.12f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFD97706))
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "${quote.displayDayTitle} / 607",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Động lực ôn thi THPTQG",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFB45309)
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFDC2626).copy(alpha = 0.12f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "Còn $daysUntilExam ngày",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFDC2626)
+                        )
+                    }
+                    IconButton(
+                        onClick = onNextQuote,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Casino,
+                            contentDescription = "Đổi câu khác",
+                            modifier = Modifier.size(16.dp),
+                            tint = Color(0xFFD97706)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(verticalAlignment = Alignment.Top) {
+                Icon(
+                    Icons.Default.FormatQuote,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = Color(0xFFD97706).copy(alpha = 0.6f)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = quote.content,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontStyle = FontStyle.Italic,
+                    lineHeight = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Text(
+                    text = "Chạm để xem trọn bộ 607 câu ➔",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFFD97706)
+                )
+            }
+        }
+    }
+}
+
