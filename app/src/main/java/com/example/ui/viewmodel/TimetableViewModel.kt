@@ -68,7 +68,8 @@ data class TimetableUiState(
     // Daily Motivation Quotes from 607 Quotes File for THPTQG
     val currentQuote: MotivationQuote? = null,
     val showMotivationQuotesDialog: Boolean = false,
-    val selectedWallpaperQuote: MotivationQuote? = null
+    val selectedWallpaperQuote: MotivationQuote? = null,
+    val isMotivation3hEnabled: Boolean = true
 )
 
 class TimetableViewModel(application: Application) : AndroidViewModel(application) {
@@ -86,7 +87,8 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             isNotificationsEnabled = prefs.isNotificationsEnabled(),
             selectedModel = prefs.getSelectedModel(),
             currentUser = authManager.currentUser.value,
-            currentQuote = MotivationQuotesHelper.getTodayQuote(application)
+            currentQuote = MotivationQuotesHelper.getTodayQuote(application),
+            isMotivation3hEnabled = prefs.isMotivation3hNotificationEnabled()
         )
     )
     val uiState: StateFlow<TimetableUiState> = _uiState.asStateFlow()
@@ -707,5 +709,23 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setSelectedWallpaperQuote(quote: MotivationQuote?) {
         _uiState.update { it.copy(selectedWallpaperQuote = quote) }
+    }
+
+    fun toggleMotivation3hNotifications(enabled: Boolean) {
+        prefs.setMotivation3hNotificationEnabled(enabled)
+        _uiState.update { it.copy(isMotivation3hEnabled = enabled) }
+        val app = getApplication<Application>()
+        if (enabled) {
+            com.example.util.MotivationNotificationHelper.scheduleNext3HourAlarm(app)
+            showSnackbar("Đã bật thông báo động lực mỗi 3 giờ (14/10/2026 – 10/06/2028).")
+        } else {
+            com.example.util.MotivationNotificationHelper.cancel3HourAlarm(app)
+            showSnackbar("Đã tắt thông báo động lực mỗi 3 giờ.")
+        }
+    }
+
+    fun triggerInstantMotivationNotification() {
+        val app = getApplication<Application>()
+        com.example.util.MotivationNotificationHelper.showInstantTestNotification(app)
     }
 }

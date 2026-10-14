@@ -915,7 +915,7 @@ fun DailyMotivationBanner(
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = "Còn $daysUntilExam ngày",
+                            text = "Còn $daysUntilExam ngày (đến 10/06/2028)",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFDC2626)

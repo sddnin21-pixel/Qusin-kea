@@ -66,21 +66,60 @@ object MotivationQuotesHelper {
         return list
     }
 
+    const val START_YEAR = 2026
+    const val START_MONTH = Calendar.OCTOBER // Calendar.OCTOBER is 9
+    const val START_DAY = 14
+
+    const val END_YEAR = 2028
+    const val END_MONTH = Calendar.JUNE // Calendar.JUNE is 5
+    const val END_DAY = 10
+
     /**
-     * Lấy câu động lực của ngày hôm nay (tự động nhảy câu mỗi ngày theo lịch)
+     * Lấy số ngày (1..607) dựa trên mốc hành trình 607 ngày: 14/10/2026 -> 10/06/2028
+     * Ngày 14/10/2026 tương ứng Ngày 001.
+     * Ngày 10/06/2028 tương ứng Ngày 607.
+     */
+    fun getDayNumberForDate(cal: Calendar): Int {
+        val startCal = Calendar.getInstance().apply {
+            set(START_YEAR, START_MONTH, START_DAY, 0, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val targetCal = Calendar.getInstance().apply {
+            timeInMillis = cal.timeInMillis
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val diffMillis = targetCal.timeInMillis - startCal.timeInMillis
+        val days = (diffMillis / (1000L * 60 * 60 * 24)).toInt()
+        return (days + 1).coerceIn(1, 607)
+    }
+
+    /**
+     * Kiểm tra thời điểm có nằm trong giai đoạn thông báo 14/10/2026 đến 10/06/2028 hay không
+     */
+    fun isWithinCampaignPeriod(timeMs: Long = System.currentTimeMillis()): Boolean {
+        val startCal = Calendar.getInstance().apply {
+            set(START_YEAR, START_MONTH, START_DAY, 0, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val endCal = Calendar.getInstance().apply {
+            set(END_YEAR, END_MONTH, END_DAY, 23, 59, 59)
+            set(Calendar.MILLISECOND, 999)
+        }
+        return timeMs in startCal.timeInMillis..endCal.timeInMillis
+    }
+
+    /**
+     * Lấy câu động lực của ngày hôm nay (tự động nhảy theo ngày từ 14/10/2026 đến 10/06/2028)
      */
     fun getTodayQuote(context: Context): MotivationQuote {
         val quotes = getAllQuotes(context)
-        if (quotes.isEmpty()) return MotivationQuote(1, "Kiên trì hôm nay, thành công ngày mai.")
+        if (quotes.isEmpty()) return MotivationQuote(1, "Có thể hôm nay chẳng ai nhìn thấy nỗ lực của bạn...")
 
-        val cal = Calendar.getInstance()
-        val year = cal.get(Calendar.YEAR)
-        val dayOfYear = cal.get(Calendar.DAY_OF_YEAR)
-
-        // Tính chỉ số ngày luân phiên qua các năm
-        val totalDays = (year - 2026) * 365 + dayOfYear
-        val index = (Math.abs(totalDays) % quotes.size)
-        return quotes[index]
+        val dayNumber = getDayNumberForDate(Calendar.getInstance())
+        return getQuoteByDay(context, dayNumber)
     }
 
     /**
@@ -117,22 +156,34 @@ object MotivationQuotesHelper {
     }
 
     /**
-     * Đếm ngược số ngày đến kỳ thi THPT Quốc Gia (cuối tháng 6 hàng năm)
+     * Đếm ngược số ngày đến mốc kết thúc 607 ngày ôn thi THPT Quốc Gia (10/06/2028)
+     * Bắt đầu: 14/10/2026 -> Kết thúc: 10/06/2028.
+     * Ngày 14/10/2026 là Ngày 001 của hành trình, còn đúng 605 ngày đến ngày 10/06/2028.
      */
-    fun getDaysUntilThptExam(): Int {
-        val now = Calendar.getInstance()
-        val examCal = Calendar.getInstance().apply {
-            set(Calendar.MONTH, Calendar.JUNE)
-            set(Calendar.DAY_OF_MONTH, 26)
-            set(Calendar.HOUR_OF_DAY, 7)
+    fun getDaysUntilThptExam(nowMs: Long = System.currentTimeMillis()): Int {
+        val nowCal = Calendar.getInstance().apply {
+            timeInMillis = nowMs
+            set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        if (now.after(examCal)) {
-            examCal.add(Calendar.YEAR, 1)
+        val targetCal = Calendar.getInstance().apply {
+            set(END_YEAR, END_MONTH, END_DAY, 0, 0, 0)
+            set(Calendar.MILLISECOND, 0)
         }
-        val diffMillis = examCal.timeInMillis - now.timeInMillis
-        return (diffMillis / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(0)
+        val diffMillis = targetCal.timeInMillis - nowCal.timeInMillis
+        val days = (diffMillis / (1000L * 60 * 60 * 24)).toInt()
+        return days.coerceAtLeast(0)
+    }
+
+    /**
+     * Lấy mô tả chi tiết tiến trình đếm ngược
+     */
+    fun getCountdownSummary(nowMs: Long = System.currentTimeMillis()): String {
+        val nowCal = Calendar.getInstance().apply { timeInMillis = nowMs }
+        val dayNum = getDayNumberForDate(nowCal)
+        val daysLeft = getDaysUntilThptExam(nowMs)
+        return "Ngày %03d/607 • Còn %d ngày (đến 10/06/2028)".format(dayNum, daysLeft)
     }
 }

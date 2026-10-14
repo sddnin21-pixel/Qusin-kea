@@ -31,6 +31,8 @@ class MainActivity : ComponentActivity() {
 
         // Create notification channel early
         createNotificationChannel()
+        com.example.util.MotivationNotificationHelper.createNotificationChannel(this)
+        com.example.util.MotivationNotificationHelper.scheduleNext3HourAlarm(this)
 
         // Prompt for notification permission on Android 13+
         checkAndRequestNotificationPermission()

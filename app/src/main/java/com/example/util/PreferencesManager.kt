@@ -12,6 +12,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_CUSTOM_API_KEY = "custom_gemini_api_key"
         private const val KEY_DEFAULT_REMINDER_MINUTES = "default_reminder_minutes"
         private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
+        private const val KEY_MOTIVATION_3H_ENABLED = "motivation_3h_enabled"
         private const val KEY_FIRST_LAUNCH = "first_launch"
         private const val KEY_SELECTED_MODEL = "selected_gemini_model"
         const val DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
@@ -61,6 +62,14 @@ class PreferencesManager(context: Context) {
 
     fun setNotificationsEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, enabled).apply()
+    }
+
+    fun isMotivation3hNotificationEnabled(): Boolean {
+        return prefs.getBoolean(KEY_MOTIVATION_3H_ENABLED, true)
+    }
+
+    fun setMotivation3hNotificationEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_MOTIVATION_3H_ENABLED, enabled).apply()
     }
 
     fun isFirstLaunch(): Boolean {

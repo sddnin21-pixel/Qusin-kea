@@ -39,6 +39,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- 3-Hour Daily Motivation Quote Alarm Receiver (14/10/2026 - 10/06/2028) -->
+        <receiver
+            android:name=".receiver.MotivationQuoteAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="com.example.receiver.ACTION_TRIGGER_3H_MOTIVATION" />
+            </intent-filter>
+        </receiver>
+
         <!-- Timetable Countdown AppWidget -->
         <receiver
             android:name=".widget.TimetableCountdownWidgetProvider"

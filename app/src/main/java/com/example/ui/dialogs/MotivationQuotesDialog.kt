@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -41,6 +42,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -178,7 +180,7 @@ fun MotivationQuotesDialog(
                                     .padding(horizontal = 8.dp, vertical = 3.dp)
                             ) {
                                 Text(
-                                    text = "Còn $daysUntilExam ngày thi THPT",
+                                    text = "Còn $daysUntilExam ngày (đến 10/06/2028)",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFDC2626)
@@ -249,7 +251,85 @@ fun MotivationQuotesDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // 3-Hour Motivation Notification Status & Trigger Strip
+                val prefs = remember { com.example.util.PreferencesManager(context) }
+                var is3hEnabled by remember { mutableStateOf(prefs.isMotivation3hNotificationEnabled()) }
+
+                Surface(
+                    color = Color(0xFFF59E0B).copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = null,
+                                tint = Color(0xFFD97706),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "Thông báo tự động mỗi 3h",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF92400E)
+                                )
+                                Text(
+                                    text = "Chu kỳ 3 tiếng • 14/10/2026 – 10/06/2028",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FilledTonalButton(
+                                onClick = {
+                                    com.example.util.MotivationNotificationHelper.showInstantTestNotification(context)
+                                    Toast.makeText(context, "🌟 Đã gửi thông báo câu động lực hôm nay!", Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text("Bắn thử 🔔", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            Switch(
+                                checked = is3hEnabled,
+                                onCheckedChange = { checked ->
+                                    is3hEnabled = checked
+                                    prefs.setMotivation3hNotificationEnabled(checked)
+                                    if (checked) {
+                                        com.example.util.MotivationNotificationHelper.scheduleNext3HourAlarm(context)
+                                        Toast.makeText(context, "Đã bật thông báo mỗi 3 giờ!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        com.example.util.MotivationNotificationHelper.cancel3HourAlarm(context)
+                                        Toast.makeText(context, "Đã tắt thông báo mỗi 3 giờ.", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.size(width = 36.dp, height = 24.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Search Box
                 OutlinedTextField(

@@ -520,6 +520,131 @@ fun SettingsScreen(
             }
         }
 
+        // Section 3B: 3-Hour Daily Motivation Quote Notifications (14/10/2026 - 10/06/2028)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = Color(0xFFF59E0B),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Thông Báo Động Lực Mỗi 3 Giờ",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "14/10/2026 – 10/06/2028 • 607 Ngày Ôn Thi THPTQG",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = state.isMotivation3hEnabled,
+                        onCheckedChange = { checked ->
+                            if (checked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                val hasPerm = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (!hasPerm) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    viewModel.toggleMotivation3hNotifications(true)
+                                }
+                            } else {
+                                viewModel.toggleMotivation3hNotifications(checked)
+                            }
+                        },
+                        modifier = Modifier.testTag("motivation_3h_notification_switch")
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Surface(
+                    color = Color(0xFFF59E0B).copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "🎯 Chu kỳ phát thông báo: Mỗi 3 giờ một lần (06:00, 09:00, 12:00, 15:00, 18:00, 21:00...)",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFB45309)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Mỗi thông báo sẽ gửi câu nói truyền cảm hứng của ngày hôm nay kèm số ngày đếm ngược đến kỳ thi THPT Quốc Gia, giúp duy trì năng lượng và sự tập trung cao độ.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 17.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                val hasPerm = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (!hasPerm) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    return@Button
+                                }
+                            }
+                            viewModel.triggerInstantMotivationNotification()
+                            Toast.makeText(context, "🌟 Đã gửi thông báo câu động lực hôm nay!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("test_motivation_notification_btn"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFD97706)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Bắn Thử Ngay", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = { viewModel.setShowMotivationQuotesDialog(true) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("open_all_quotes_btn"),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Xem 607 Câu", fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
         // Section 4: Home Screen Widget Info
         Card(
             modifier = Modifier.fillMaxWidth(),
