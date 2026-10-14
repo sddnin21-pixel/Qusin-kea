@@ -16,7 +16,9 @@ class ExampleUnitTest {
 
   @Test
   fun testQuotes607FileParse() {
-    val file = java.io.File("src/main/res/raw/quotes_607.txt")
+    val candidate1 = java.io.File("src/main/res/raw/quotes_607.txt")
+    val candidate2 = java.io.File("app/src/main/res/raw/quotes_607.txt")
+    val file = if (candidate1.exists()) candidate1 else candidate2
     assertTrue("quotes_607.txt should exist", file.exists())
 
     val quotes = mutableListOf<Pair<Int, String>>()
