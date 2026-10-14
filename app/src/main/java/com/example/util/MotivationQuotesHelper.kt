@@ -92,7 +92,7 @@ object MotivationQuotesHelper {
             set(Calendar.MILLISECOND, 0)
         }
         val diffMillis = targetCal.timeInMillis - startCal.timeInMillis
-        val days = (diffMillis / (1000L * 60 * 60 * 24)).toInt()
+        val days = Math.round(diffMillis.toDouble() / (1000.0 * 60 * 60 * 24)).toInt()
         return (days + 1).coerceIn(1, 607)
     }
 
@@ -173,7 +173,7 @@ object MotivationQuotesHelper {
             set(Calendar.MILLISECOND, 0)
         }
         val diffMillis = targetCal.timeInMillis - nowCal.timeInMillis
-        val days = (diffMillis / (1000L * 60 * 60 * 24)).toInt()
+        val days = Math.round(diffMillis.toDouble() / (1000.0 * 60 * 60 * 24)).toInt()
         return days.coerceAtLeast(0)
     }
 

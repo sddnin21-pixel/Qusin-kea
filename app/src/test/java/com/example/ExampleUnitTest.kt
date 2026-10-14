@@ -43,4 +43,32 @@ class ExampleUnitTest {
     assertEquals("Có thể hôm nay chẳng ai nhìn thấy nỗ lực của bạn, nhưng một ngày nào đó, chính bạn sẽ biết ơn mình vì đã không bỏ cuộc.", quotes.first().second)
     assertEquals(607, quotes.last().first)
   }
+
+  @Test
+  fun testDateCountdownCalculation() {
+    val calStart = java.util.Calendar.getInstance().apply {
+      set(2026, java.util.Calendar.OCTOBER, 14, 0, 0, 0)
+      set(java.util.Calendar.MILLISECOND, 0)
+    }
+    val calEnd = java.util.Calendar.getInstance().apply {
+      set(2028, java.util.Calendar.JUNE, 10, 0, 0, 0)
+      set(java.util.Calendar.MILLISECOND, 0)
+    }
+
+    // On 14/10/2026: Day 1
+    val dayAtStart = com.example.util.MotivationQuotesHelper.getDayNumberForDate(calStart)
+    assertEquals(1, dayAtStart)
+
+    // On 10/06/2028: Day 606
+    val dayAtEnd = com.example.util.MotivationQuotesHelper.getDayNumberForDate(calEnd)
+    assertEquals(606, dayAtEnd)
+
+    // Days remaining on 14/10/2026 until 10/06/2028: exactly 605 days
+    val daysLeftAtStart = com.example.util.MotivationQuotesHelper.getDaysUntilThptExam(calStart.timeInMillis)
+    assertEquals(605, daysLeftAtStart)
+
+    // Days remaining on 10/06/2028: 0 days
+    val daysLeftAtEnd = com.example.util.MotivationQuotesHelper.getDaysUntilThptExam(calEnd.timeInMillis)
+    assertEquals(0, daysLeftAtEnd)
+  }
 }
